@@ -1,5 +1,7 @@
 using csharp_integrations_core.Auth.Bearer;
+using csharp_integrations_core.Auth.SAML;
 using csharp_integrations_core.Swagger;
+using ITfoxtec.Identity.Saml2.MvcCore.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,6 +12,11 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddBearerAuthentication(builder.Configuration);
 builder.Services.AddTransient<TokenService>();
 #endregion Bearer Auth
+
+// Adding Saml authentication service
+#region Saml2 Auth
+builder.Services.AddSamlAuthentication(builder.Configuration);
+#endregion Saml2 Auth
 
 builder.Services.AddControllers();
 
@@ -33,6 +40,8 @@ if (app.Environment.IsDevelopment())
     
     app.MapOpenApi();
 }
+
+app.UseSaml2();
 
 app.UseHttpsRedirection();
 

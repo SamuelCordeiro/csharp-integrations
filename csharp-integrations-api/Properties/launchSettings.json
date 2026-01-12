@@ -25,7 +25,13 @@
       "launchUrl": "swagger",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "APIKEY": "534df@j3s45sdfkj*as3df4377865qrj(hfd9789sa8#f"
+        "APIKEY": "534df@j3s45sdfkj*as3df4377865qrj(hfd9789sa8#f",
+        "IdPMetadata": "https://dev-2aah2sqox1zn5pat.us.auth0.com/samlp/metadata/8jqGf1PQ8txifc7NUmIYytogYnsFYhFf",
+        "Issuer": "urn:dev-2aah2sqox1zn5pat.us.auth0.com",
+        "SignatureAlgorithm": "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+        "CertificateValidationMode": "None",
+        "RevocationMode": "NoCheck",
+        "AudienceRestricted": false
       }
     }
   },
