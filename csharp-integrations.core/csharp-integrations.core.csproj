@@ -9,9 +9,25 @@
   </PropertyGroup>
 
     <ItemGroup>
+      <PackageReference Include="ITfoxtec.Identity.Saml2" Version="4.8.6" />
+      <PackageReference Include="ITfoxtec.Identity.Saml2.MvcCore" Version="4.8.6" />
       <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.17" />
+      <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.9" />
       <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.11" />
       <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.3" />
+      <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.15.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Remove="Auth\SAML\ClaimsTransform\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Remove="Auth\SAML\ClaimsTransform\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Remove="Auth\SAML\ClaimsTransform\**" />
     </ItemGroup>
 
 </Project>
