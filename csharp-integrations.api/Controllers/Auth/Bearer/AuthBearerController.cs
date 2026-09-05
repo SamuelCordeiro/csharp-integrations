@@ -1,31 +1,41 @@
-using csharp_integrations.core.Auth;
+using csharp_integrations.core.Auth.Bearer;
 using csharp_integrations.core.GlobalResources.Models;
 using csharp_integrations.core.GlobalResources.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace csharp_integrations.api.Controllers.Auth.Bearer;
 
+/// <summary>
+/// Issues JWT access tokens for the demonstration users.
+/// </summary>
 [ApiController]
 [Route("Auth/Bearer/[controller]")]
-public class AuthBearerController : Controller
+public class AuthBearerController(TokenService tokenService) : Controller
 {
+    /// <summary>
+    /// Autentica o usuário e retorna um access token JWT.
+    /// </summary>
     [HttpPost("Login")]
     [AllowAnonymous]
-    public ActionResult<dynamic> Login([FromBody] UserLogin model)
+    [EnableRateLimiting("authentication")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public ActionResult<LoginResponse> Login([FromBody] UserLogin model)
     {
         var user = UserRepository.Get(model.Username, model.Password);
 
-        if (user == null) return NotFound();
+        if (user == null) return Unauthorized();
 
-        var token = new TokenService().Generate(user, 5);
+        var token = tokenService.Generate(user, 5);
 
-        var result = new
+        return Ok(new LoginResponse
         {
-            username = model.Username,
-            token,
-        };
-
-        return Content(Newtonsoft.Json.JsonConvert.SerializeObject(result), "application/json");
+            Username = user.Username,
+            AccessToken = token
+        });
     }
 }
