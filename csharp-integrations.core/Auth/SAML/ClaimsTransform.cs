@@ -3,13 +3,17 @@ using System.Security.Claims;
 
 namespace csharp_integrations.core.Auth.SAML;
 
+/// <summary>
+/// Transforms authenticated SAML claims into the application's claim identity.
+/// </summary>
 public class ClaimsTransform
 {
     /// <summary>
     /// Transforms an authenticated ClaimsPrincipal.
     /// If the user is not authenticated, the original principal is returned.
     /// </summary>
-    /// <param name="incomingPrincipal">Claims principal object</param>
+    /// <param name="incomingPrincipal">Incoming claims principal.</param>
+    /// <returns>The original principal when unauthenticated; otherwise, a transformed principal.</returns>
     public static ClaimsPrincipal Transform(ClaimsPrincipal incomingPrincipal)
     {
         return incomingPrincipal.Identity is not { IsAuthenticated: true }

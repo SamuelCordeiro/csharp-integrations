@@ -8,42 +8,92 @@ using System.ServiceModel.Security;
 
 namespace csharp_integrations.core.Auth.SAML;
 
+/// <summary>
+/// Provides optional SAML service-provider registration and configuration validation.
+/// </summary>
 public static class SamlMiddleware
 {
+    private const string SamlMetadataHttpClientName = "SamlMetadata";
+
+    private static readonly string[] RequiredConfigurationKeys =
+    [
+        "SAML:IdPMetadata",
+        "SAML:Issuer",
+        "SAML:SignatureAlgorithm",
+        "SAML:CertificateValidationMode",
+        "SAML:RevocationMode",
+        "SAML:AudienceRestricted"
+    ];
+
     /// <summary>
-    /// Generic integration of the SP Saml2 middleware
+    /// Determines whether SAML authentication is enabled and validates a partial SAML configuration.
     /// </summary>
-    /// <param name="services"></param>
-    /// <param name="configuration"></param>
-    /// <returns></returns>
-    /// <exception cref="Exception"></exception>
+    /// <param name="configuration">Application configuration.</param>
+    /// <returns><see langword="true"/> when every required SAML setting is configured; otherwise, <see langword="false"/> when SAML is not configured.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when only part of the SAML configuration is supplied.</exception>
+    public static bool IsSamlAuthenticationEnabled(this IConfiguration configuration)
+    {
+        var configuredKeys = RequiredConfigurationKeys
+            .Where(key => !string.IsNullOrWhiteSpace(configuration[key]))
+            .ToArray();
+
+        if (configuredKeys.Length == 0)
+        {
+            return false;
+        }
+
+        var missingKeys = RequiredConfigurationKeys
+            .Where(key => string.IsNullOrWhiteSpace(configuration[key]))
+            .ToArray();
+
+        if (missingKeys.Length > 0)
+        {
+            throw new InvalidOperationException($"Incomplete SAML configuration. Missing: {string.Join(", ", missingKeys)}.");
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Registers the SAML service-provider services when SAML is enabled.
+    /// </summary>
+    /// <param name="services">Service collection to update.</param>
+    /// <param name="configuration">Application configuration.</param>
+    /// <returns>The updated service collection.</returns>
     public static IServiceCollection AddSamlAuthentication(this IServiceCollection services,
         IConfiguration configuration)
     {
-        if (configuration["SAML:IdPMetadata"] == null) return services;
+        if (!configuration.IsSamlAuthenticationEnabled())
+        {
+            return services;
+        }
 
         // Load certificated
         var certificateFile = configuration["SAML:SigningCertificateFile"];
-        var certificate = new X509Certificate2();
+        X509Certificate2? certificate = null;
 
-        if (certificateFile != null)
+        if (!string.IsNullOrWhiteSpace(certificateFile))
         {
-            certificate = new X509Certificate2(certificateFile);
+            certificate = X509CertificateLoader.LoadCertificateFromFile(certificateFile);
+            var clientCertificate = certificate;
 
-            // Add the certificate to the application's trusted certificate store.
-            services.AddHttpClient("YourHttpClientName")
+            services.AddHttpClient(SamlMetadataHttpClientName)
                 .ConfigurePrimaryHttpMessageHandler(() =>
                 {
                     var handler = new HttpClientHandler();
-                    handler.ClientCertificates.Add(certificate);
+                    handler.ClientCertificates.Add(clientCertificate);
                     return handler;
                 });
         }
+        else
+        {
+            services.AddHttpClient(SamlMetadataHttpClientName);
+        }
 
         // Load Sp Saml configurations
-        services.Configure<Saml2Configuration>(saml2Configuration =>
+        services.AddOptions<Saml2Configuration>().Configure<IHttpClientFactory>((saml2Configuration, httpClientFactory) =>
         {
-            if (certificateFile != null)
+            if (certificate is not null)
             {
                 saml2Configuration.SigningCertificate = certificate;
             }
@@ -66,10 +116,16 @@ public static class SamlMiddleware
                 bool.Parse(configuration["SAML:AudienceRestricted"] ??
                            throw new InvalidOperationException("SAML:AudienceRestricted not configured."));
 
+            var metadataUri = new Uri(configuration["SAML:IdPMetadata"] ??
+                                      throw new InvalidOperationException("SAML:IdPMetadata not configured."));
             var entityDescriptor = new EntityDescriptor();
-            entityDescriptor.ReadIdPSsoDescriptorFromUrl(new Uri(configuration["SAML:IdPMetadata"] ??
-                                                                 throw new InvalidOperationException(
-                                                                     "SAML:IdPMetadata not configured.")));
+            entityDescriptor.ReadIdPSsoDescriptorFromUrlAsync(
+                    httpClientFactory,
+                    metadataUri,
+                    cancellationToken: null,
+                    httpClientName: SamlMetadataHttpClientName)
+                .GetAwaiter()
+                .GetResult();
 
 
             if (entityDescriptor.IdPSsoDescriptor != null)
@@ -81,7 +137,7 @@ public static class SamlMiddleware
             }
             else
             {
-                throw new Exception("IdPSsoDescriptor not loaded from metadata.");
+                throw new InvalidOperationException("IdPSsoDescriptor not loaded from metadata.");
             }
         });
 

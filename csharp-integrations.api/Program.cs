@@ -1,9 +1,11 @@
 using csharp_integrations.core.Auth;
 using csharp_integrations.core.Auth.SAML;
 using csharp_integrations.core.Swagger;
+using csharp_integrations.api.Infrastructure;
 using ITfoxtec.Identity.Saml2.MvcCore.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
+var isSamlAuthenticationEnabled = builder.Configuration.IsSamlAuthenticationEnabled();
 
 // Add services to the container.
 #region Bearer Auth
@@ -13,10 +15,20 @@ builder.Services.AddTransient<TokenService>();
 
 // Adding Saml authentication service
 #region Saml2 Auth
-builder.Services.AddSamlAuthentication(builder.Configuration);
+if (isSamlAuthenticationEnabled)
+{
+    builder.Services.AddSamlAuthentication(builder.Configuration);
+}
 #endregion Saml2 Auth
 
 builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+    if (!isSamlAuthenticationEnabled)
+    {
+        options.Conventions.Add(new ConditionalSamlControllerConvention());
+    }
+});
 
 // Adding Swagger service
 #region Swagger
@@ -51,7 +63,13 @@ app.UseSaml2();
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 app.UseAuthorization();
+
+if (isSamlAuthenticationEnabled)
+{
+    app.UseSaml2();
+}
 
 app.MapControllers();
 
