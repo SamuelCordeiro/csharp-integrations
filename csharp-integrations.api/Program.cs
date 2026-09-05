@@ -1,11 +1,14 @@
 using csharp_integrations.core.Auth;
+using csharp_integrations.core.Auth.Bearer;
 using csharp_integrations.core.Auth.SAML;
 using csharp_integrations.core.Swagger;
 using csharp_integrations.api.Infrastructure;
 using ITfoxtec.Identity.Saml2.MvcCore.Configuration;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 var isSamlAuthenticationEnabled = builder.Configuration.IsSamlAuthenticationEnabled();
+var corsAllowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 
 // Add services to the container.
 #region Bearer Auth
@@ -28,6 +31,28 @@ builder.Services.AddControllers(options =>
     {
         options.Conventions.Add(new ConditionalSamlControllerConvention());
     }
+});
+
+if (corsAllowedOrigins.Length > 0)
+{
+    builder.Services.AddCors(options => options.AddPolicy("Frontend", policy => policy
+        .WithOrigins(corsAllowedOrigins)
+        .AllowAnyHeader()
+        .AllowAnyMethod()));
+}
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("authentication", context => RateLimitPartition.GetFixedWindowLimiter(
+        GetClientIdentifier(context),
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 5,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        }));
 });
 
 // Adding Swagger service
@@ -59,9 +84,15 @@ if (app.Environment.IsDevelopment())
     // app.MapOpenApi();
 }
 
-app.UseSaml2();
-
 app.UseHttpsRedirection();
+app.UseRouting();
+
+if (corsAllowedOrigins.Length > 0)
+{
+    app.UseCors("Frontend");
+}
+
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -74,3 +105,8 @@ if (isSamlAuthenticationEnabled)
 app.MapControllers();
 
 app.Run();
+
+static string GetClientIdentifier(HttpContext context)
+{
+    return context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+}
