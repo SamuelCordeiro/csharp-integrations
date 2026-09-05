@@ -5,27 +5,41 @@ using System.Text;
 using csharp_integrations.core.GlobalResources.Models;
 using Microsoft.Extensions.Configuration;
 
-namespace csharp_integrations.core.Auth;
+namespace csharp_integrations.core.Auth.Bearer;
 
+/// <summary>
+/// Creates signed JWT access tokens for authenticated users.
+/// </summary>
 public class TokenService
 {
-    private readonly IConfiguration _config = new ConfigurationBuilder()
-        .AddUserSecrets<TokenService>()
-        .Build();
+    private readonly IConfiguration _configuration;
 
     /// <summary>
-    /// Generates a JWT token for any user object with a mapping function to Claims.
+    /// Initializes the service with application configuration.
+    /// </summary>
+    /// <param name="configuration">Application configuration containing JWT settings.</param>
+    public TokenService(IConfiguration configuration)
+    {
+        _configuration = configuration;
+    }
+
+    /// <summary>
+    /// Generates a signed JWT access token for a user.
     /// </summary>
     /// <param name="user">User Object</param>
     /// <param name="minutesToExpire">Token expiration time in minutes</param>
-    /// <returns></returns>
-    public String Generate(User user, Double minutesToExpire)
+    /// <returns>The serialized JWT access token.</returns>
+    public string Generate(User user, double minutesToExpire)
     {
         var handler = new JwtSecurityTokenHandler();
 
-        // var key = Encoding.ASCII.GetBytes(Environment.GetEnvironmentVariable("APIKEY"));
-        var key = Encoding.ASCII.GetBytes(_config["BearerToken:ApiKey"] ??
-                                          throw new InvalidOperationException("BearerToken:ApiKey not configured."));
+        var apiKey = _configuration["BearerToken:ApiKey"]
+                     ?? throw new InvalidOperationException("BearerToken:ApiKey not configured.");
+        var issuer = _configuration["BearerToken:Issuer"]
+                     ?? throw new InvalidOperationException("BearerToken:Issuer not configured.");
+        var audience = _configuration["BearerToken:Audience"]
+                       ?? throw new InvalidOperationException("BearerToken:Audience not configured.");
+        var key = Encoding.UTF8.GetBytes(apiKey);
 
         var credentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature);
 
@@ -34,6 +48,8 @@ public class TokenService
             Subject = GenerateClaims(user),
             SigningCredentials = credentials,
             Expires = DateTime.UtcNow.AddMinutes(minutesToExpire),
+            Issuer = issuer,
+            Audience = audience
         };
 
         var token = handler.CreateToken(tokenDescriptor);
@@ -42,10 +58,10 @@ public class TokenService
     }
 
     /// <summary>
-    /// Generates user claims
+    /// Generates the claims included in an access token.
     /// </summary>
     /// <param name="user">User Object</param>
-    /// <returns></returns>
+    /// <returns>An identity containing the user claims.</returns>
     private static ClaimsIdentity GenerateClaims(User user)
     {
         var ci = new ClaimsIdentity();
@@ -56,10 +72,10 @@ public class TokenService
     }
 
     /// <summary>
-    /// Extract user id from token claims.
+    /// Extracts the user identifier from token claims.
     /// </summary>
     /// <param name="userClaims">User claims</param>
-    /// <returns></returns>
+    /// <returns>The numeric user identifier.</returns>
     /// <exception cref="ArgumentNullException">Exception for null claims</exception>
     /// <exception cref="InvalidOperationException">Exception for claims without id</exception>
     /// <exception cref="FormatException">Exception for non-numeric claim id</exception>
