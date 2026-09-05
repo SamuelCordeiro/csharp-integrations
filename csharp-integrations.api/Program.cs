@@ -22,11 +22,19 @@ builder.Services.AddControllers();
 #region Swagger
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerWithBearerSupport("Csharp Integrations Api", "v1", "Collection of endpoints for the CSharp integration Api.");
+var xmlDocumentationFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+var xmlDocumentationPath = Path.Combine(AppContext.BaseDirectory, xmlDocumentationFile);
+var coreXmlDocumentationFile = $"{typeof(ChatRequest).Assembly.GetName().Name}.xml";
+var coreXmlDocumentationPath = Path.Combine(AppContext.BaseDirectory, coreXmlDocumentationFile);
+builder.Services.AddSwaggerWithBearerSupport(
+    "Csharp Integrations Api",
+    "v1",
+    "Collection of endpoints for the CSharp integration Api.",
+    [xmlDocumentationPath, coreXmlDocumentationPath]);
 #endregion Swagger
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+// builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
@@ -36,7 +44,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
     
-    app.MapOpenApi();
+    // app.MapOpenApi();
 }
 
 app.UseSaml2();
