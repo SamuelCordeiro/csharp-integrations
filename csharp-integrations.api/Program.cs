@@ -1,7 +1,8 @@
-using csharp_integrations.core.Auth;
+using csharp_integrations.core.AI.Providers.Ollama.Extensions;
 using csharp_integrations.core.Auth.Bearer;
 using csharp_integrations.core.Auth.SAML;
 using csharp_integrations.core.Swagger;
+using csharp_integrations.core.AI.Providers.Ollama.Models;
 using csharp_integrations.api.Infrastructure;
 using ITfoxtec.Identity.Saml2.MvcCore.Configuration;
 using System.Threading.RateLimiting;
@@ -24,7 +25,10 @@ if (isSamlAuthenticationEnabled)
 }
 #endregion Saml2 Auth
 
-builder.Services.AddControllers();
+#region  Ollama
+builder.Services.AddOllama(builder.Configuration);
+#endregion Ollama
+
 builder.Services.AddControllers(options =>
 {
     if (!isSamlAuthenticationEnabled)
@@ -50,6 +54,24 @@ builder.Services.AddRateLimiter(options =>
         {
             PermitLimit = 5,
             Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        }));
+    options.AddPolicy("ollama", context => RateLimitPartition.GetFixedWindowLimiter(
+        GetClientIdentifier(context),
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 30,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        }));
+    options.AddPolicy("ollama-download", context => RateLimitPartition.GetFixedWindowLimiter(
+        GetClientIdentifier(context),
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 3,
+            Window = TimeSpan.FromHours(1),
             QueueLimit = 0,
             AutoReplenishment = true
         }));
