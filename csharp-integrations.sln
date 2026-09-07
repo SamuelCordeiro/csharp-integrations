@@ -4,6 +4,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "csharp-integrations.core", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "csharp-integrations.api", "csharp-integrations.api\csharp-integrations.api.csproj", "{2E9FE7BA-85C5-4F99-AB14-69BB4F9BF3E3}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "csharp-integrations.tests", "csharp-integrations.tests\csharp-integrations.tests.csproj", "{4D42F3C0-A40C-4A7E-8C18-AC6645B120F0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{2E9FE7BA-85C5-4F99-AB14-69BB4F9BF3E3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2E9FE7BA-85C5-4F99-AB14-69BB4F9BF3E3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2E9FE7BA-85C5-4F99-AB14-69BB4F9BF3E3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4D42F3C0-A40C-4A7E-8C18-AC6645B120F0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4D42F3C0-A40C-4A7E-8C18-AC6645B120F0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4D42F3C0-A40C-4A7E-8C18-AC6645B120F0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4D42F3C0-A40C-4A7E-8C18-AC6645B120F0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

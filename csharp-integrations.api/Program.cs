@@ -12,6 +12,15 @@ var isSamlAuthenticationEnabled = builder.Configuration.IsSamlAuthenticationEnab
 var corsAllowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 
 // Add services to the container.
+#region Error Handling
+builder.Services.AddProblemDetails(options =>
+{
+    options.CustomizeProblemDetails = context =>
+        context.ProblemDetails.Extensions.TryAdd("traceId", context.HttpContext.TraceIdentifier);
+});
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+#endregion Error Handling
+
 #region Bearer Auth
 builder.Services.AddBearerAuthentication(builder.Configuration);
 builder.Services.AddTransient<TokenService>();
@@ -98,6 +107,10 @@ builder.Services.AddSwaggerWithBearerSupport(
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+#region Error Handling
+app.UseExceptionHandler();
+#endregion Error Handling
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -131,4 +144,11 @@ app.Run();
 static string GetClientIdentifier(HttpContext context)
 {
     return context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+}
+
+/// <summary>
+/// Exposes the top-level application entry point to the integration-test assembly.
+/// </summary>
+public partial class Program
+{
 }
