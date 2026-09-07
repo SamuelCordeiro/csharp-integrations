@@ -34,6 +34,8 @@ csharp-integrations.tests  # Testes unitários e de integração
 - Rate limit para login, operações de IA e download de modelos.
 - CORS opcional, ativado somente quando `Cors:AllowedOrigins` é configurado.
 - Redirecionamento HTTPS.
+- Respostas de erro RFC 7807 (`ProblemDetails`) com `traceId` para rastreabilidade.
+- Tratamento global de exceções, sem expor detalhes internos fora do ambiente de desenvolvimento.
 - Swagger UI em ambiente de desenvolvimento.
 - Esquema HTTP Bearer no Swagger, aplicado apenas aos endpoints que exigem autenticação.
 - Documentação XML exposta no Swagger.

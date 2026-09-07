@@ -111,6 +111,7 @@ var app = builder.Build();
 app.UseExceptionHandler();
 #endregion Error Handling
 
+#region Swagger
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
