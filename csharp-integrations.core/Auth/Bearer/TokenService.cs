@@ -31,6 +31,45 @@ public class TokenService
     /// <returns>The serialized JWT access token.</returns>
     public string Generate(User user, double minutesToExpire)
     {
+        return Generate(user.Id, user.Username, minutesToExpire);
+    }
+
+    /// <summary>
+    /// Generates a signed JWT access token using the configured access token lifetime.
+    /// </summary>
+    /// <param name="userId">Authenticated user identifier.</param>
+    /// <param name="username">Authenticated username.</param>
+    /// <returns>The serialized JWT access token.</returns>
+    public string GenerateAccessToken(int userId, string username)
+    {
+        return Generate(userId, username, GetAccessTokenLifetime().TotalMinutes);
+    }
+
+    /// <summary>
+    /// Gets the configured access token lifetime.
+    /// </summary>
+    /// <returns>The access token lifetime.</returns>
+    public TimeSpan GetAccessTokenLifetime()
+    {
+        var minutes = _configuration.GetValue<double?>("BearerToken:AccessTokenMinutes") ?? 5;
+
+        if (minutes <= 0)
+        {
+            throw new InvalidOperationException("BearerToken:AccessTokenMinutes must be greater than zero.");
+        }
+
+        return TimeSpan.FromMinutes(minutes);
+    }
+
+    /// <summary>
+    /// Generates a signed JWT access token for a user identifier and username.
+    /// </summary>
+    /// <param name="userId">Authenticated user identifier.</param>
+    /// <param name="username">Authenticated username.</param>
+    /// <param name="minutesToExpire">Token expiration time in minutes.</param>
+    /// <returns>The serialized JWT access token.</returns>
+    private string Generate(int userId, string username, double minutesToExpire)
+    {
         var handler = new JwtSecurityTokenHandler();
 
         var apiKey = _configuration["BearerToken:ApiKey"]
@@ -45,7 +84,7 @@ public class TokenService
 
         var tokenDescriptor = new SecurityTokenDescriptor
         {
-            Subject = GenerateClaims(user),
+            Subject = GenerateClaims(userId, username),
             SigningCredentials = credentials,
             Expires = DateTime.UtcNow.AddMinutes(minutesToExpire),
             Issuer = issuer,
@@ -60,13 +99,14 @@ public class TokenService
     /// <summary>
     /// Generates the claims included in an access token.
     /// </summary>
-    /// <param name="user">User Object</param>
+    /// <param name="userId">Authenticated user identifier.</param>
+    /// <param name="username">Authenticated username.</param>
     /// <returns>An identity containing the user claims.</returns>
-    private static ClaimsIdentity GenerateClaims(User user)
+    private static ClaimsIdentity GenerateClaims(int userId, string username)
     {
         var ci = new ClaimsIdentity();
-        ci.AddClaim(new Claim(ClaimTypes.Name, user.Username));
-        ci.AddClaim(new Claim(type: "Id", value: user.Id.ToString()));
+        ci.AddClaim(new Claim(ClaimTypes.Name, username));
+        ci.AddClaim(new Claim(type: "Id", value: userId.ToString()));
 
         return ci;
     }

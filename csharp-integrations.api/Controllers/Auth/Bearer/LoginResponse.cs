@@ -14,4 +14,14 @@ public sealed class LoginResponse
     /// Gets the short-lived JWT access token.
     /// </summary>
     public required string AccessToken { get; init; }
+
+    /// <summary>
+    /// Gets the access token lifetime in seconds.
+    /// </summary>
+    public required int ExpiresInSeconds { get; init; }
+
+    /// <summary>
+    /// Gets the authorization scheme required by protected endpoints.
+    /// </summary>
+    public string TokenType { get; init; } = "Bearer";
 }

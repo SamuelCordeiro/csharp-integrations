@@ -15,12 +15,22 @@ public static class UserRepository
     /// <returns>The matching user, or <see langword="null"/> when the credentials are invalid.</returns>
     public static User? Get(string username, string password)
     {
-        var users = new List<User>
-        {
-            new User { Id = 1, Username = "Josh", Password = "123", Role = "manager" },
-            new User { Id = 2, Username = "Alice", Password = "123", Role = "employee" }
-        };
-
-        return users.FirstOrDefault(x => x.Username == username && x.Password == password);
+        return Users.FirstOrDefault(x => x.Username == username && x.Password == password);
     }
+
+    /// <summary>
+    /// Finds a demonstration user by identifier.
+    /// </summary>
+    /// <param name="userId">User identifier to match.</param>
+    /// <returns>The matching user, or <see langword="null"/> when no user is found.</returns>
+    public static User? GetById(int userId)
+    {
+        return Users.FirstOrDefault(user => user.Id == userId);
+    }
+
+    private static readonly IReadOnlyList<User> Users =
+    [
+        new User { Id = 1, Username = "Josh", Password = "123", Role = "manager" },
+        new User { Id = 2, Username = "Alice", Password = "123", Role = "employee" }
+    ];
 }

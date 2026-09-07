@@ -15,6 +15,8 @@ csharp-integrations.tests  # Testes unitários e de integração
 ### Autenticação e autorização
 
 - Login de demonstração com emissão de access token JWT.
+- Access token curto e refresh token opaco em cookie `HttpOnly` e `Secure`.
+- Rotação de refresh token, hash no armazenamento e revogação da família em caso de reutilização ou logout.
 - Validação de assinatura, emissor, audiência e expiração do JWT.
 - Proteção de endpoints com `[Authorize]`.
 - Integração SAML 2.0 opcional: só é registrada quando toda a configuração obrigatória está presente.
@@ -76,7 +78,9 @@ Em desenvolvimento, o Swagger fica disponível na rota `/swagger` da URL exibida
 
 `Issuer` e `Audience` do JWT podem ficar no `appsettings.json`, pois são identificadores públicos do token. A chave `BearerToken:ApiKey` deve ficar em User Secrets no desenvolvimento e em um gerenciador de segredos no ambiente de produção.
 
-Configurações de CORS, Ollama e SAML são opcionais conforme a integração utilizada. Para habilitar SAML, informe todos os campos obrigatórios da seção `SAML`; uma configuração parcial gera erro propositalmente, evitando um fluxo de autenticação incompleto.
+O access token dura cinco minutos por padrão e o refresh token sete dias; ambos podem ser ajustados por `BearerToken:AccessTokenMinutes` e `BearerToken:RefreshTokenDays`. O armazenamento de refresh tokens atual é em memória e serve à demonstração: os tokens são perdidos ao reiniciar a API. Uma implementação de produção deve persistir somente os hashes em banco de dados ou cache distribuído.
+
+Configurações de CORS, Ollama e SAML são opcionais conforme a integração utilizada. Para habilitar SAML, informe todos os campos obrigatórios da seção `SAML`; uma configuração parcial gera erro propositalmente, evitando um fluxo de autenticação incompleto. Para um frontend em outra origem usar o cookie de refresh, configure `Cors:AllowedOrigins`, habilite `Cors:AllowCredentials` e envie as requisições com credenciais.
 
 ## Expansão planejada
 

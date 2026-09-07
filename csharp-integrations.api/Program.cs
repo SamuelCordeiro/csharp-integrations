@@ -10,6 +10,7 @@ using System.Threading.RateLimiting;
 var builder = WebApplication.CreateBuilder(args);
 var isSamlAuthenticationEnabled = builder.Configuration.IsSamlAuthenticationEnabled();
 var corsAllowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+var corsAllowCredentials = builder.Configuration.GetValue<bool>("Cors:AllowCredentials");
 
 // Add services to the container.
 #region Error Handling
@@ -23,7 +24,9 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 #region Bearer Auth
 builder.Services.AddBearerAuthentication(builder.Configuration);
-builder.Services.AddTransient<TokenService>();
+builder.Services.AddScoped<TokenService>();
+builder.Services.AddSingleton<InMemoryRefreshTokenStore>();
+builder.Services.AddScoped<RefreshTokenService>();
 #endregion Bearer Auth
 
 // Adding Saml authentication service
@@ -38,6 +41,7 @@ if (isSamlAuthenticationEnabled)
 builder.Services.AddOllama(builder.Configuration);
 #endregion Ollama
 
+#region Controllers
 builder.Services.AddControllers(options =>
 {
     if (!isSamlAuthenticationEnabled)
@@ -45,18 +49,50 @@ builder.Services.AddControllers(options =>
         options.Conventions.Add(new ConditionalSamlControllerConvention());
     }
 });
+#endregion Controllers
 
+#region Cors
 if (corsAllowedOrigins.Length > 0)
 {
-    builder.Services.AddCors(options => options.AddPolicy("Frontend", policy => policy
-        .WithOrigins(corsAllowedOrigins)
-        .AllowAnyHeader()
-        .AllowAnyMethod()));
-}
+    builder.Services.AddCors(options => options.AddPolicy("Frontend", policy =>
+    {
+        policy
+            .WithOrigins(corsAllowedOrigins)
+            .AllowAnyHeader()
+            .AllowAnyMethod();
 
+        if (corsAllowCredentials)
+        {
+            policy.AllowCredentials();
+        }
+    }));
+}
+#endregion Cors
+
+#region Rate Limiting
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        var problemDetails = new Microsoft.AspNetCore.Mvc.ProblemDetails
+        {
+            Status = StatusCodes.Status429TooManyRequests,
+            Title = "Too Many Requests",
+            Type = "https://httpstatuses.com/429",
+            Detail = "The request rate limit has been exceeded.",
+            Instance = context.HttpContext.Request.Path
+        };
+        problemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
+
+        await context.HttpContext.RequestServices
+            .GetRequiredService<IProblemDetailsService>()
+            .TryWriteAsync(new ProblemDetailsContext
+            {
+                HttpContext = context.HttpContext,
+                ProblemDetails = problemDetails
+            });
+    };
     options.AddPolicy("authentication", context => RateLimitPartition.GetFixedWindowLimiter(
         GetClientIdentifier(context),
         _ => new FixedWindowRateLimiterOptions
@@ -85,6 +121,7 @@ builder.Services.AddRateLimiter(options =>
             AutoReplenishment = true
         }));
 });
+#endregion Rate Limiting
 
 // Adding Swagger service
 #region Swagger
@@ -119,26 +156,39 @@ if (app.Environment.IsDevelopment())
     
     // app.MapOpenApi();
 }
+#endregion Swagger
 
+#region Http
 app.UseHttpsRedirection();
 app.UseRouting();
+#endregion Http
 
+#region Cors
 if (corsAllowedOrigins.Length > 0)
 {
     app.UseCors("Frontend");
 }
+#endregion Cors
 
+#region Rate Limiting
 app.UseRateLimiter();
+#endregion Rate Limiting
 
+#region Bearer Auth
 app.UseAuthentication();
 app.UseAuthorization();
+#endregion Bearer Auth
 
+#region Saml2 Auth
 if (isSamlAuthenticationEnabled)
 {
     app.UseSaml2();
 }
+#endregion Saml2 Auth
 
+#region Controllers
 app.MapControllers();
+#endregion Controllers
 
 app.Run();
 
