@@ -12,10 +12,18 @@ namespace csharp_integrations.api.Controllers.Auth.Bearer;
 /// </summary>
 [ApiController]
 [Route("Auth/Bearer/[controller]")]
-public class AuthBearerController(TokenService tokenService) : Controller
+public class AuthBearerController(
+    RefreshTokenService refreshTokenService,
+    IConfiguration configuration) : Controller
 {
+    private const string RefreshTokenCookieName = "refresh_token";
+    private const string RefreshTokenCookiePath = "/Auth/Bearer/AuthBearer";
+    private readonly SameSiteMode _refreshTokenSameSite = configuration.GetValue<bool>("Cors:AllowCredentials")
+        ? SameSiteMode.None
+        : SameSiteMode.Lax;
+
     /// <summary>
-    /// Autentica o usuário e retorna um access token JWT.
+    /// Authenticates a user and returns a short-lived JWT access token.
     /// </summary>
     [HttpPost("Login")]
     [AllowAnonymous]
@@ -30,12 +38,87 @@ public class AuthBearerController(TokenService tokenService) : Controller
 
         if (user == null) return Unauthorized();
 
-        var token = tokenService.Generate(user, 5);
+        var tokenPair = refreshTokenService.CreateTokenPair(user);
+        SetRefreshTokenCookie(tokenPair);
 
-        return Ok(new LoginResponse
+        return Ok(CreateLoginResponse(tokenPair));
+    }
+
+    /// <summary>
+    /// Rotates the refresh token cookie and returns a new access token.
+    /// </summary>
+    [HttpPost("Refresh")]
+    [AllowAnonymous]
+    [EnableRateLimiting("authentication")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public ActionResult<LoginResponse> Refresh()
+    {
+        var refreshResult = refreshTokenService.Refresh(Request.Cookies[RefreshTokenCookieName]);
+
+        if (refreshResult.Status != RefreshTokenRotationStatus.Succeeded || refreshResult.TokenPair is null)
         {
-            Username = user.Username,
-            AccessToken = token
+            DeleteRefreshTokenCookie();
+            return Unauthorized();
+        }
+
+        SetRefreshTokenCookie(refreshResult.TokenPair);
+
+        return Ok(CreateLoginResponse(refreshResult.TokenPair));
+    }
+
+    /// <summary>
+    /// Revokes the current refresh token family and clears its cookie.
+    /// </summary>
+    [HttpPost("Logout")]
+    [AllowAnonymous]
+    [EnableRateLimiting("authentication")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public IActionResult Logout()
+    {
+        refreshTokenService.Revoke(Request.Cookies[RefreshTokenCookieName]);
+        DeleteRefreshTokenCookie();
+
+        return NoContent();
+    }
+
+    private void SetRefreshTokenCookie(TokenPair tokenPair)
+    {
+        Response.Cookies.Append(
+            RefreshTokenCookieName,
+            tokenPair.RefreshToken,
+            new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = _refreshTokenSameSite,
+                IsEssential = true,
+                Path = RefreshTokenCookiePath,
+                Expires = tokenPair.RefreshTokenExpiresAtUtc
+            });
+    }
+
+    private void DeleteRefreshTokenCookie()
+    {
+        Response.Cookies.Delete(RefreshTokenCookieName, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = _refreshTokenSameSite,
+            IsEssential = true,
+            Path = RefreshTokenCookiePath
         });
+    }
+
+    private static LoginResponse CreateLoginResponse(TokenPair tokenPair)
+    {
+        return new LoginResponse
+        {
+            Username = tokenPair.Username,
+            AccessToken = tokenPair.AccessToken,
+            ExpiresInSeconds = tokenPair.ExpiresInSeconds
+        };
     }
 }
