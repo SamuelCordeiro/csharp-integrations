@@ -29,6 +29,56 @@ public sealed class AuthBearerEndpointsTests
         Assert.NotNull(result);
         Assert.Equal("Josh", result.Username);
         Assert.False(string.IsNullOrWhiteSpace(result.AccessToken));
+        Assert.Equal(300, result.ExpiresInSeconds);
+        Assert.Contains("httponly", GetRefreshTokenCookie(response), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("secure", GetRefreshTokenCookie(response), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("samesite=lax", GetRefreshTokenCookie(response), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Verifies that refresh tokens rotate and a replay revokes the entire token family.
+    /// </summary>
+    [Fact]
+    public async Task Refresh_WithReusedToken_RevokesTheTokenFamily()
+    {
+        using var factory = new ApiFactory();
+        var client = CreateHttpsClient(factory, handleCookies: false);
+        var loginResponse = await client.PostAsJsonAsync(
+            "/Auth/Bearer/AuthBearer/Login",
+            new { username = "Josh", password = "123" });
+        var originalRefreshToken = GetRefreshTokenValue(loginResponse);
+
+        var refreshResponse = await client.SendAsync(CreateRefreshRequest(originalRefreshToken));
+        var replacementRefreshToken = GetRefreshTokenValue(refreshResponse);
+        var replayResponse = await client.SendAsync(CreateRefreshRequest(originalRefreshToken));
+        var replacementResponse = await client.SendAsync(CreateRefreshRequest(replacementRefreshToken));
+
+        Assert.Equal(HttpStatusCode.OK, refreshResponse.StatusCode);
+        Assert.NotEqual(originalRefreshToken, replacementRefreshToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, replayResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, replacementResponse.StatusCode);
+    }
+
+    /// <summary>
+    /// Verifies that logout revokes the current refresh token family.
+    /// </summary>
+    [Fact]
+    public async Task Logout_WithRefreshToken_RevokesTheTokenFamily()
+    {
+        using var factory = new ApiFactory();
+        var client = CreateHttpsClient(factory, handleCookies: false);
+        var loginResponse = await client.PostAsJsonAsync(
+            "/Auth/Bearer/AuthBearer/Login",
+            new { username = "Josh", password = "123" });
+        var refreshToken = GetRefreshTokenValue(loginResponse);
+        var logoutRequest = new HttpRequestMessage(HttpMethod.Post, "/Auth/Bearer/AuthBearer/Logout");
+        logoutRequest.Headers.Add("Cookie", $"refresh_token={refreshToken}");
+
+        var logoutResponse = await client.SendAsync(logoutRequest);
+        var refreshResponse = await client.SendAsync(CreateRefreshRequest(refreshToken));
+
+        Assert.Equal(HttpStatusCode.NoContent, logoutResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, refreshResponse.StatusCode);
     }
 
     /// <summary>
@@ -119,6 +169,8 @@ public sealed class AuthBearerEndpointsTests
         public required string Username { get; init; }
 
         public required string AccessToken { get; init; }
+
+        public required int ExpiresInSeconds { get; init; }
     }
 
     private sealed class ProblemResult
@@ -130,9 +182,33 @@ public sealed class AuthBearerEndpointsTests
         public string? TraceId { get; init; }
     }
 
-    private static HttpClient CreateHttpsClient(ApiFactory factory) => factory.CreateClient(
+    private static HttpClient CreateHttpsClient(ApiFactory factory, bool handleCookies = true) => factory.CreateClient(
         new WebApplicationFactoryClientOptions
         {
-            BaseAddress = new Uri("https://localhost")
+            BaseAddress = new Uri("https://localhost"),
+            HandleCookies = handleCookies
         });
+
+    private static HttpRequestMessage CreateRefreshRequest(string refreshToken)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/Auth/Bearer/AuthBearer/Refresh");
+        request.Headers.Add("Cookie", $"refresh_token={refreshToken}");
+        return request;
+    }
+
+    private static string GetRefreshTokenValue(HttpResponseMessage response)
+    {
+        var cookie = GetRefreshTokenCookie(response);
+        const string cookieName = "refresh_token=";
+        var valueStart = cookie.IndexOf(cookieName, StringComparison.Ordinal) + cookieName.Length;
+        var valueEnd = cookie.IndexOf(';', valueStart);
+
+        return cookie[valueStart..valueEnd];
+    }
+
+    private static string GetRefreshTokenCookie(HttpResponseMessage response)
+    {
+        return response.Headers.GetValues("Set-Cookie")
+            .Single(header => header.StartsWith("refresh_token=", StringComparison.Ordinal));
+    }
 }
