@@ -15,6 +15,11 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     /// </summary>
     public DbSet<RefreshTokenEntity> RefreshTokens => Set<RefreshTokenEntity>();
 
+    /// <summary>
+    /// Gets the persisted active password policy.
+    /// </summary>
+    public DbSet<PasswordPolicy> PasswordPolicies => Set<PasswordPolicy>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -31,6 +36,18 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
                 .WithMany()
                 .HasForeignKey(token => token.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<PasswordPolicy>(entity =>
+        {
+            entity.HasKey(policy => policy.Id);
+            entity.ToTable(table =>
+            {
+                table.HasCheckConstraint("CK_PasswordPolicies_MinimumLength", "MinimumLength >= 8");
+                table.HasCheckConstraint("CK_PasswordPolicies_RequiredUniqueCharacters", "RequiredUniqueCharacters >= 1");
+                table.HasCheckConstraint("CK_PasswordPolicies_MaxFailedAccessAttempts", "MaxFailedAccessAttempts >= 1");
+                table.HasCheckConstraint("CK_PasswordPolicies_LockoutDurationMinutes", "LockoutDurationMinutes >= 1");
+            });
         });
     }
 }

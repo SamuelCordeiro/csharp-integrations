@@ -52,6 +52,8 @@ builder.Services
     .AddSignInManager()
     .AddDefaultTokenProviders();
 builder.Services.AddScoped<IdentityDataSeeder>();
+builder.Services.AddScoped<PasswordPolicyDataSeeder>();
+builder.Services.AddScoped<PasswordPolicyService>();
 builder.Services.AddAuthorization(ApplicationAuthorizationPolicies.Configure);
 #endregion Identity and Persistence
 
@@ -174,6 +176,7 @@ await using (var scope = app.Services.CreateAsyncScope())
 {
     var database = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     await database.Database.MigrateAsync();
+    await scope.ServiceProvider.GetRequiredService<PasswordPolicyDataSeeder>().SeedAsync();
 
     if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
     {

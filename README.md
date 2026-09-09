@@ -82,6 +82,8 @@ Os usuários de demonstração para testes no Swagger são `Josh` / `Demo#123` (
 
 O access token dura cinco minutos por padrão e o refresh token sete dias; ambos podem ser ajustados por `BearerToken:AccessTokenMinutes` e `BearerToken:RefreshTokenDays`. A connection string SQLite fica em `ConnectionStrings:DefaultConnection`; as migrations são aplicadas na inicialização e somente hashes de refresh token são persistidos.
 
+A política ativa de senha e lockout é persistida na tabela `PasswordPolicies` e inicializada com requisitos seguros. A administração e a validação dinâmica dessa política serão adicionadas nos próximos módulos de identidade.
+
 Configurações de CORS, Ollama e SAML são opcionais conforme a integração utilizada. Para habilitar SAML, informe todos os campos obrigatórios da seção `SAML`; uma configuração parcial gera erro propositalmente, evitando um fluxo de autenticação incompleto. Para um frontend em outra origem usar o cookie de refresh, configure `Cors:AllowedOrigins`, habilite `Cors:AllowCredentials` e envie as requisições com credenciais.
 
 ## Expansão planejada
