@@ -40,10 +40,11 @@ builder.Services
     .AddIdentityCore<ApplicationUser>(options =>
     {
         options.Password.RequiredLength = 8;
-        options.Password.RequireDigit = true;
-        options.Password.RequireLowercase = true;
-        options.Password.RequireUppercase = true;
-        options.Password.RequireNonAlphanumeric = true;
+        options.Password.RequireDigit = false;
+        options.Password.RequireLowercase = false;
+        options.Password.RequireUppercase = false;
+        options.Password.RequireNonAlphanumeric = false;
+        options.Password.RequiredUniqueChars = 1;
         options.Lockout.AllowedForNewUsers = true;
         options.Lockout.MaxFailedAccessAttempts = 5;
     })
@@ -54,6 +55,7 @@ builder.Services
 builder.Services.AddScoped<IdentityDataSeeder>();
 builder.Services.AddScoped<PasswordPolicyDataSeeder>();
 builder.Services.AddScoped<PasswordPolicyService>();
+builder.Services.AddScoped<IPasswordValidator<ApplicationUser>, PasswordPolicyValidator>();
 builder.Services.AddAuthorization(ApplicationAuthorizationPolicies.Configure);
 #endregion Identity and Persistence
 
