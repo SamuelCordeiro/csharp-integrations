@@ -1,7 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using csharp_integrations.core.Auth.Bearer;
-using csharp_integrations.core.GlobalResources.Models;
 using Microsoft.Extensions.Configuration;
 
 namespace csharp_integrations.tests.Unit;
@@ -22,15 +21,14 @@ public sealed class TokenServiceTests
     public void Generate_AddsConfiguredIssuerAudienceAndUserClaims()
     {
         var service = new TokenService(CreateConfiguration());
-        var user = new User { Id = 42, Username = "test-user", Password = "not-used", Role = "employee" };
-
-        var serializedToken = service.Generate(user, 5);
+        var serializedToken = service.GenerateAccessToken(42, "test-user", ["employee"]);
         var token = new JwtSecurityTokenHandler().ReadJwtToken(serializedToken);
 
         Assert.Equal(Issuer, token.Issuer);
         Assert.Contains(Audience, token.Audiences);
-        Assert.Contains(token.Claims, claim => claim.Type == JwtRegisteredClaimNames.UniqueName && claim.Value == user.Username);
-        Assert.Contains(token.Claims, claim => claim.Type == "Id" && claim.Value == user.Id.ToString());
+        Assert.Contains(token.Claims, claim => claim.Type == JwtRegisteredClaimNames.UniqueName && claim.Value == "test-user");
+        Assert.Contains(token.Claims, claim => claim.Type == "Id" && claim.Value == "42");
+        Assert.Contains(token.Claims, claim => claim.Type == "role" && claim.Value == "employee");
         Assert.True(token.ValidTo > DateTime.UtcNow);
     }
 

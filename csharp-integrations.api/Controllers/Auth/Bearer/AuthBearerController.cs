@@ -1,7 +1,7 @@
 using csharp_integrations.core.Auth.Bearer;
-using csharp_integrations.core.GlobalResources.Models;
-using csharp_integrations.core.GlobalResources.Repositories;
+using csharp_integrations.api.Data;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -14,6 +14,9 @@ namespace csharp_integrations.api.Controllers.Auth.Bearer;
 [Route("Auth/Bearer/[controller]")]
 public class AuthBearerController(
     RefreshTokenService refreshTokenService,
+    TokenService tokenService,
+    UserManager<ApplicationUser> userManager,
+    SignInManager<ApplicationUser> signInManager,
     IConfiguration configuration) : Controller
 {
     private const string RefreshTokenCookieName = "refresh_token";
@@ -32,16 +35,26 @@ public class AuthBearerController(
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
-    public ActionResult<LoginResponse> Login([FromBody] UserLogin model)
+    public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest model)
     {
-        var user = UserRepository.Get(model.Username, model.Password);
+        var user = await userManager.FindByNameAsync(model.Username);
 
-        if (user == null) return Unauthorized();
+        if (user is null)
+        {
+            return Unauthorized();
+        }
 
-        var tokenPair = refreshTokenService.CreateTokenPair(user);
-        SetRefreshTokenCookie(tokenPair);
+        var signInResult = await signInManager.CheckPasswordSignInAsync(user, model.Password, lockoutOnFailure: true);
+        if (!signInResult.Succeeded)
+        {
+            return Unauthorized();
+        }
 
-        return Ok(CreateLoginResponse(tokenPair));
+        var refreshTokenIssue = await refreshTokenService.CreateAsync(user.Id, user.UserName!);
+        var roles = await userManager.GetRolesAsync(user);
+        SetRefreshTokenCookie(refreshTokenIssue);
+
+        return Ok(CreateLoginResponse(user, roles));
     }
 
     /// <summary>
@@ -53,19 +66,28 @@ public class AuthBearerController(
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
-    public ActionResult<LoginResponse> Refresh()
+    public async Task<ActionResult<LoginResponse>> Refresh()
     {
-        var refreshResult = refreshTokenService.Refresh(Request.Cookies[RefreshTokenCookieName]);
+        var refreshResult = await refreshTokenService.RefreshAsync(Request.Cookies[RefreshTokenCookieName]);
 
-        if (refreshResult.Status != RefreshTokenRotationStatus.Succeeded || refreshResult.TokenPair is null)
+        if (refreshResult.Status != RefreshTokenRotationStatus.Succeeded || refreshResult.RefreshTokenIssue is null)
         {
             DeleteRefreshTokenCookie();
             return Unauthorized();
         }
 
-        SetRefreshTokenCookie(refreshResult.TokenPair);
+        var user = await userManager.FindByIdAsync(refreshResult.RefreshTokenIssue.UserId.ToString());
+        if (user is null)
+        {
+            await refreshTokenService.RevokeAsync(refreshResult.RefreshTokenIssue.RefreshToken);
+            DeleteRefreshTokenCookie();
+            return Unauthorized();
+        }
 
-        return Ok(CreateLoginResponse(refreshResult.TokenPair));
+        var roles = await userManager.GetRolesAsync(user);
+        SetRefreshTokenCookie(refreshResult.RefreshTokenIssue);
+
+        return Ok(CreateLoginResponse(user, roles));
     }
 
     /// <summary>
@@ -76,19 +98,19 @@ public class AuthBearerController(
     [EnableRateLimiting("authentication")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
-    public IActionResult Logout()
+    public async Task<IActionResult> Logout()
     {
-        refreshTokenService.Revoke(Request.Cookies[RefreshTokenCookieName]);
+        await refreshTokenService.RevokeAsync(Request.Cookies[RefreshTokenCookieName]);
         DeleteRefreshTokenCookie();
 
         return NoContent();
     }
 
-    private void SetRefreshTokenCookie(TokenPair tokenPair)
+    private void SetRefreshTokenCookie(RefreshTokenIssue refreshTokenIssue)
     {
         Response.Cookies.Append(
             RefreshTokenCookieName,
-            tokenPair.RefreshToken,
+            refreshTokenIssue.RefreshToken,
             new CookieOptions
             {
                 HttpOnly = true,
@@ -96,7 +118,7 @@ public class AuthBearerController(
                 SameSite = _refreshTokenSameSite,
                 IsEssential = true,
                 Path = RefreshTokenCookiePath,
-                Expires = tokenPair.RefreshTokenExpiresAtUtc
+                Expires = refreshTokenIssue.RefreshTokenExpiresAtUtc
             });
     }
 
@@ -112,13 +134,15 @@ public class AuthBearerController(
         });
     }
 
-    private static LoginResponse CreateLoginResponse(TokenPair tokenPair)
+    private LoginResponse CreateLoginResponse(
+        ApplicationUser user,
+        IEnumerable<string> roles)
     {
         return new LoginResponse
         {
-            Username = tokenPair.Username,
-            AccessToken = tokenPair.AccessToken,
-            ExpiresInSeconds = tokenPair.ExpiresInSeconds
+            Username = user.UserName!,
+            AccessToken = tokenService.GenerateAccessToken(user.Id, user.UserName!, roles),
+            ExpiresInSeconds = (int)tokenService.GetAccessTokenLifetime().TotalSeconds
         };
     }
 }

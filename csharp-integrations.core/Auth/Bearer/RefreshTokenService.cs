@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using csharp_integrations.core.GlobalResources.Models;
 using Microsoft.Extensions.Configuration;
 
 namespace csharp_integrations.core.Auth.Bearer;
@@ -9,30 +8,32 @@ namespace csharp_integrations.core.Auth.Bearer;
 /// Issues, rotates, and revokes opaque refresh tokens.
 /// </summary>
 public sealed class RefreshTokenService(
-    TokenService tokenService,
-    InMemoryRefreshTokenStore refreshTokenStore,
+    IRefreshTokenStore refreshTokenStore,
     IConfiguration configuration)
 {
     /// <summary>
-    /// Creates a short-lived access token and a refresh token for a user.
+    /// Creates a refresh token for the authenticated user.
     /// </summary>
-    /// <param name="user">Authenticated user.</param>
-    /// <returns>The access token and raw refresh token for delivery to the client.</returns>
-    public TokenPair CreateTokenPair(User user)
+    /// <param name="userId">Authenticated user identifier.</param>
+    /// <param name="username">Authenticated username.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The raw refresh token and its metadata.</returns>
+    public async Task<RefreshTokenIssue> CreateAsync(int userId, string username, CancellationToken cancellationToken = default)
     {
         var refreshToken = CreateRefreshToken();
-        var refreshTokenRecord = CreateRecord(user.Id, user.Username, Guid.NewGuid(), refreshToken);
-        refreshTokenStore.Add(refreshTokenRecord);
+        var refreshTokenRecord = CreateRecord(userId, username, Guid.NewGuid(), refreshToken);
+        await refreshTokenStore.AddAsync(refreshTokenRecord, cancellationToken);
 
-        return CreateTokenPair(user.Id, user.Username, refreshToken, refreshTokenRecord.ExpiresAtUtc);
+        return CreateRefreshTokenIssue(userId, username, refreshToken, refreshTokenRecord.ExpiresAtUtc);
     }
 
     /// <summary>
     /// Rotates a valid refresh token and returns a new token pair.
     /// </summary>
     /// <param name="refreshToken">Raw refresh token supplied by the client.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The rotation result and replacement token pair when successful.</returns>
-    public RefreshTokenRefreshResult Refresh(string? refreshToken)
+    public async Task<RefreshTokenRefreshResult> RefreshAsync(string? refreshToken, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(refreshToken))
         {
@@ -41,21 +42,22 @@ public sealed class RefreshTokenService(
 
         var replacementToken = CreateRefreshToken();
         var now = DateTime.UtcNow;
-        var rotationResult = refreshTokenStore.Rotate(
+        var rotationResult = await refreshTokenStore.RotateAsync(
             HashToken(refreshToken),
             currentToken => CreateRecord(
                 currentToken.UserId,
                 currentToken.Username,
                 currentToken.FamilyId,
                 replacementToken),
-            now);
+            now,
+            cancellationToken);
 
         if (rotationResult.Status != RefreshTokenRotationStatus.Succeeded || rotationResult.RefreshToken is null)
         {
             return new RefreshTokenRefreshResult { Status = rotationResult.Status };
         }
 
-        var tokenPair = CreateTokenPair(
+        var refreshTokenIssue = CreateRefreshTokenIssue(
             rotationResult.RefreshToken.UserId,
             rotationResult.RefreshToken.Username,
             replacementToken,
@@ -64,7 +66,7 @@ public sealed class RefreshTokenService(
         return new RefreshTokenRefreshResult
         {
             Status = RefreshTokenRotationStatus.Succeeded,
-            TokenPair = tokenPair
+            RefreshTokenIssue = refreshTokenIssue
         };
     }
 
@@ -72,25 +74,25 @@ public sealed class RefreshTokenService(
     /// Revokes every refresh token in the family of the supplied token.
     /// </summary>
     /// <param name="refreshToken">Raw refresh token supplied by the client.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns><see langword="true"/> when a token family was revoked.</returns>
-    public bool Revoke(string? refreshToken)
+    public async Task<bool> RevokeAsync(string? refreshToken, CancellationToken cancellationToken = default)
     {
         return !string.IsNullOrWhiteSpace(refreshToken)
-               && refreshTokenStore.RevokeFamily(HashToken(refreshToken), DateTime.UtcNow);
+               && await refreshTokenStore.RevokeFamilyAsync(HashToken(refreshToken), DateTime.UtcNow, cancellationToken);
     }
 
-    private TokenPair CreateTokenPair(
+    private RefreshTokenIssue CreateRefreshTokenIssue(
         int userId,
         string username,
         string refreshToken,
         DateTime refreshTokenExpiresAtUtc)
     {
-        return new TokenPair
+        return new RefreshTokenIssue
         {
+            UserId = userId,
             Username = username,
-            AccessToken = tokenService.GenerateAccessToken(userId, username),
             RefreshToken = refreshToken,
-            ExpiresInSeconds = (int)tokenService.GetAccessTokenLifetime().TotalSeconds,
             RefreshTokenExpiresAtUtc = refreshTokenExpiresAtUtc
         };
     }

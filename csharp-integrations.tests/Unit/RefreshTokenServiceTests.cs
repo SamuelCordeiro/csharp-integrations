@@ -1,5 +1,4 @@
 using csharp_integrations.core.Auth.Bearer;
-using csharp_integrations.core.GlobalResources.Models;
 using Microsoft.Extensions.Configuration;
 
 namespace csharp_integrations.tests.Unit;
@@ -13,19 +12,19 @@ public sealed class RefreshTokenServiceTests
     /// Verifies that replaying a rotated token revokes every token in its family.
     /// </summary>
     [Fact]
-    public void Refresh_WithReusedToken_RevokesTheTokenFamily()
+    public async Task RefreshAsync_WithReusedToken_RevokesTheTokenFamily()
     {
         var service = CreateService();
-        var user = new User { Id = 42, Username = "test-user", Password = "not-used", Role = "employee" };
-        var initialPair = service.CreateTokenPair(user);
+        var initialIssue = await service.CreateAsync(42, "test-user");
 
-        var rotation = service.Refresh(initialPair.RefreshToken);
-        var replay = service.Refresh(initialPair.RefreshToken);
-        var replacementAttempt = service.Refresh(rotation.TokenPair!.RefreshToken);
+        var rotation = await service.RefreshAsync(initialIssue.RefreshToken);
+        var replay = await service.RefreshAsync(initialIssue.RefreshToken);
+        var replacementAttempt = await service.RefreshAsync(rotation.RefreshTokenIssue!.RefreshToken);
 
         Assert.Equal(RefreshTokenRotationStatus.Succeeded, rotation.Status);
-        Assert.NotNull(rotation.TokenPair);
-        Assert.NotEqual(initialPair.RefreshToken, rotation.TokenPair.RefreshToken);
+        Assert.NotNull(rotation.RefreshTokenIssue);
+        Assert.NotEqual(initialIssue.RefreshToken, rotation.RefreshTokenIssue.RefreshToken);
+        Assert.Equal(42, rotation.RefreshTokenIssue.UserId);
         Assert.Equal(RefreshTokenRotationStatus.Reused, replay.Status);
         Assert.Equal(RefreshTokenRotationStatus.Reused, replacementAttempt.Status);
     }
@@ -34,14 +33,13 @@ public sealed class RefreshTokenServiceTests
     /// Verifies that revoking a refresh token prevents future rotations.
     /// </summary>
     [Fact]
-    public void Revoke_WithActiveToken_PreventsFutureRotation()
+    public async Task RevokeAsync_WithActiveToken_PreventsFutureRotation()
     {
         var service = CreateService();
-        var user = new User { Id = 42, Username = "test-user", Password = "not-used", Role = "employee" };
-        var tokenPair = service.CreateTokenPair(user);
+        var refreshTokenIssue = await service.CreateAsync(42, "test-user");
 
-        var revoked = service.Revoke(tokenPair.RefreshToken);
-        var refreshResult = service.Refresh(tokenPair.RefreshToken);
+        var revoked = await service.RevokeAsync(refreshTokenIssue.RefreshToken);
+        var refreshResult = await service.RefreshAsync(refreshTokenIssue.RefreshToken);
 
         Assert.True(revoked);
         Assert.Equal(RefreshTokenRotationStatus.Reused, refreshResult.Status);
@@ -52,17 +50,10 @@ public sealed class RefreshTokenServiceTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["BearerToken:ApiKey"] = "unit-test-signing-key-that-is-long-enough-for-hmac-sha256",
-                ["BearerToken:Issuer"] = "csharp-integrations-unit-tests",
-                ["BearerToken:Audience"] = "csharp-integrations-unit-tests-client",
-                ["BearerToken:AccessTokenMinutes"] = "5",
                 ["BearerToken:RefreshTokenDays"] = "7"
             })
             .Build();
 
-        return new RefreshTokenService(
-            new TokenService(configuration),
-            new InMemoryRefreshTokenStore(),
-            configuration);
+        return new RefreshTokenService(new InMemoryRefreshTokenStore(), configuration);
     }
 }

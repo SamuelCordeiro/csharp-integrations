@@ -27,7 +27,7 @@ public class OllamaController : ControllerBase
     }
     
     /// <summary>
-    /// Verifica se o servidor Ollama está disponível.
+    /// Checks whether the Ollama server is available.
     /// </summary>
     [HttpGet("health")]
     [AllowAnonymous]
@@ -43,7 +43,7 @@ public class OllamaController : ControllerBase
     }
     
     /// <summary>
-    /// Lista os modelos disponíveis no Ollama.
+    /// Lists the models available on Ollama.
     /// </summary>
     [HttpGet("models")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -55,10 +55,10 @@ public class OllamaController : ControllerBase
     }
     
     /// <summary>
-    /// Baixa um modelo no servidor Ollama.
+    /// Downloads a model to the Ollama server.
     /// </summary>
     [HttpPost("models/download")]
-    [Authorize]
+    [Authorize(Policy = "CanManageModels")]
     [EnableRateLimiting("ollama-download")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -76,7 +76,7 @@ public class OllamaController : ControllerBase
     }
 
     /// <summary>
-    /// Envia uma mensagem ao Ollama e retorna a resposta completa.
+    /// Sends a message to Ollama and returns the complete response.
     /// </summary>
     [HttpPost("chat")]
     [Authorize]
@@ -108,7 +108,7 @@ public class OllamaController : ControllerBase
     }
 
     /// <summary>
-    /// Envia uma mensagem ao Ollama e transmite a resposta gradualmente.
+    /// Sends a message to Ollama and streams the response.
     /// </summary>
     [HttpPost("chat/stream")]
     [Authorize]

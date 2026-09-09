@@ -3,7 +3,7 @@ namespace csharp_integrations.core.Auth.Bearer;
 /// <summary>
 /// Stores hashed refresh tokens for the demonstration application.
 /// </summary>
-public sealed class InMemoryRefreshTokenStore
+public sealed class InMemoryRefreshTokenStore : IRefreshTokenStore
 {
     private readonly Dictionary<string, RefreshTokenRecord> _tokens = new(StringComparer.Ordinal);
     private readonly Lock _lock = new();
@@ -12,13 +12,16 @@ public sealed class InMemoryRefreshTokenStore
     /// Stores a new refresh token record.
     /// </summary>
     /// <param name="refreshToken">Hashed refresh token record.</param>
-    public void Add(RefreshTokenRecord refreshToken)
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public Task AddAsync(RefreshTokenRecord refreshToken, CancellationToken cancellationToken = default)
     {
         lock (_lock)
         {
             RemoveExpiredTokens(DateTime.UtcNow);
             _tokens.Add(refreshToken.TokenHash, refreshToken);
         }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -27,11 +30,13 @@ public sealed class InMemoryRefreshTokenStore
     /// <param name="tokenHash">Hash of the token presented by the client.</param>
     /// <param name="createReplacement">Creates the replacement record from the active token.</param>
     /// <param name="now">Current UTC date.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The result of the rotation attempt.</returns>
-    public RefreshTokenRotationResult Rotate(
+    public Task<RefreshTokenRotationResult> RotateAsync(
         string tokenHash,
         Func<RefreshTokenRecord, RefreshTokenRecord> createReplacement,
-        DateTime now)
+        DateTime now,
+        CancellationToken cancellationToken = default)
     {
         lock (_lock)
         {
@@ -39,13 +44,13 @@ public sealed class InMemoryRefreshTokenStore
 
             if (!_tokens.TryGetValue(tokenHash, out var currentToken) || currentToken.ExpiresAtUtc <= now)
             {
-                return new RefreshTokenRotationResult { Status = RefreshTokenRotationStatus.Invalid };
+                return Task.FromResult(new RefreshTokenRotationResult { Status = RefreshTokenRotationStatus.Invalid });
             }
 
             if (currentToken.RevokedAtUtc is not null)
             {
                 RevokeFamily(currentToken.FamilyId, now);
-                return new RefreshTokenRotationResult { Status = RefreshTokenRotationStatus.Reused };
+                return Task.FromResult(new RefreshTokenRotationResult { Status = RefreshTokenRotationStatus.Reused });
             }
 
             var replacement = createReplacement(currentToken);
@@ -53,11 +58,11 @@ public sealed class InMemoryRefreshTokenStore
             currentToken.ReplacedByTokenHash = replacement.TokenHash;
             _tokens.Add(replacement.TokenHash, replacement);
 
-            return new RefreshTokenRotationResult
+            return Task.FromResult(new RefreshTokenRotationResult
             {
                 Status = RefreshTokenRotationStatus.Succeeded,
                 RefreshToken = replacement
-            };
+            });
         }
     }
 
@@ -66,8 +71,9 @@ public sealed class InMemoryRefreshTokenStore
     /// </summary>
     /// <param name="tokenHash">Hash of the token presented by the client.</param>
     /// <param name="now">Current UTC date.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns><see langword="true"/> when a token family was revoked.</returns>
-    public bool RevokeFamily(string tokenHash, DateTime now)
+    public Task<bool> RevokeFamilyAsync(string tokenHash, DateTime now, CancellationToken cancellationToken = default)
     {
         lock (_lock)
         {
@@ -75,11 +81,11 @@ public sealed class InMemoryRefreshTokenStore
 
             if (!_tokens.TryGetValue(tokenHash, out var refreshToken))
             {
-                return false;
+                return Task.FromResult(false);
             }
 
             RevokeFamily(refreshToken.FamilyId, now);
-            return true;
+            return Task.FromResult(true);
         }
     }
 

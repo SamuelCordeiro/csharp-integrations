@@ -2,7 +2,6 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using csharp_integrations.core.GlobalResources.Models;
 using Microsoft.Extensions.Configuration;
 
 namespace csharp_integrations.core.Auth.Bearer;
@@ -24,17 +23,6 @@ public class TokenService
     }
 
     /// <summary>
-    /// Generates a signed JWT access token for a user.
-    /// </summary>
-    /// <param name="user">User Object</param>
-    /// <param name="minutesToExpire">Token expiration time in minutes</param>
-    /// <returns>The serialized JWT access token.</returns>
-    public string Generate(User user, double minutesToExpire)
-    {
-        return Generate(user.Id, user.Username, minutesToExpire);
-    }
-
-    /// <summary>
     /// Generates a signed JWT access token using the configured access token lifetime.
     /// </summary>
     /// <param name="userId">Authenticated user identifier.</param>
@@ -42,7 +30,19 @@ public class TokenService
     /// <returns>The serialized JWT access token.</returns>
     public string GenerateAccessToken(int userId, string username)
     {
-        return Generate(userId, username, GetAccessTokenLifetime().TotalMinutes);
+        return GenerateAccessToken(userId, username, []);
+    }
+
+    /// <summary>
+    /// Generates a signed JWT access token with authorization roles.
+    /// </summary>
+    /// <param name="userId">Authenticated user identifier.</param>
+    /// <param name="username">Authenticated username.</param>
+    /// <param name="roles">Roles assigned to the authenticated user.</param>
+    /// <returns>The serialized JWT access token.</returns>
+    public string GenerateAccessToken(int userId, string username, IEnumerable<string> roles)
+    {
+        return Generate(userId, username, roles, GetAccessTokenLifetime().TotalMinutes);
     }
 
     /// <summary>
@@ -61,14 +61,7 @@ public class TokenService
         return TimeSpan.FromMinutes(minutes);
     }
 
-    /// <summary>
-    /// Generates a signed JWT access token for a user identifier and username.
-    /// </summary>
-    /// <param name="userId">Authenticated user identifier.</param>
-    /// <param name="username">Authenticated username.</param>
-    /// <param name="minutesToExpire">Token expiration time in minutes.</param>
-    /// <returns>The serialized JWT access token.</returns>
-    private string Generate(int userId, string username, double minutesToExpire)
+    private string Generate(int userId, string username, IEnumerable<string> roles, double minutesToExpire)
     {
         var handler = new JwtSecurityTokenHandler();
 
@@ -84,7 +77,7 @@ public class TokenService
 
         var tokenDescriptor = new SecurityTokenDescriptor
         {
-            Subject = GenerateClaims(userId, username),
+            Subject = GenerateClaims(userId, username, roles),
             SigningCredentials = credentials,
             Expires = DateTime.UtcNow.AddMinutes(minutesToExpire),
             Issuer = issuer,
@@ -101,12 +94,17 @@ public class TokenService
     /// </summary>
     /// <param name="userId">Authenticated user identifier.</param>
     /// <param name="username">Authenticated username.</param>
+    /// <param name="roles">Roles assigned to the authenticated user.</param>
     /// <returns>An identity containing the user claims.</returns>
-    private static ClaimsIdentity GenerateClaims(int userId, string username)
+    private static ClaimsIdentity GenerateClaims(int userId, string username, IEnumerable<string> roles)
     {
         var ci = new ClaimsIdentity();
         ci.AddClaim(new Claim(ClaimTypes.Name, username));
         ci.AddClaim(new Claim(type: "Id", value: userId.ToString()));
+        foreach (var role in roles)
+        {
+            ci.AddClaim(new Claim(ClaimTypes.Role, role));
+        }
 
         return ci;
     }

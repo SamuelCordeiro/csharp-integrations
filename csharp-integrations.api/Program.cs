@@ -4,7 +4,10 @@ using csharp_integrations.core.Auth.SAML;
 using csharp_integrations.core.Swagger;
 using csharp_integrations.core.AI.Providers.Ollama.Models;
 using csharp_integrations.api.Infrastructure;
+using csharp_integrations.api.Data;
 using ITfoxtec.Identity.Saml2.MvcCore.Configuration;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -25,9 +28,37 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 #region Bearer Auth
 builder.Services.AddBearerAuthentication(builder.Configuration);
 builder.Services.AddScoped<TokenService>();
-builder.Services.AddSingleton<InMemoryRefreshTokenStore>();
+builder.Services.AddScoped<IRefreshTokenStore, EfRefreshTokenStore>();
 builder.Services.AddScoped<RefreshTokenService>();
 #endregion Bearer Auth
+
+#region Identity and Persistence
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+                       ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection not configured.");
+builder.Services.AddDbContext<ApplicationDbContext>(options => options.UseSqlite(connectionString));
+builder.Services
+    .AddIdentityCore<ApplicationUser>(options =>
+    {
+        options.Password.RequiredLength = 8;
+        options.Password.RequireDigit = true;
+        options.Password.RequireLowercase = true;
+        options.Password.RequireUppercase = true;
+        options.Password.RequireNonAlphanumeric = true;
+        options.Lockout.AllowedForNewUsers = true;
+        options.Lockout.MaxFailedAccessAttempts = 5;
+    })
+    .AddRoles<IdentityRole<int>>()
+    .AddEntityFrameworkStores<ApplicationDbContext>()
+    .AddSignInManager()
+    .AddDefaultTokenProviders();
+builder.Services.AddScoped<IdentityDataSeeder>();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("CanManageModels", policy => policy
+        .RequireAuthenticatedUser()
+        .RequireRole(ApplicationRoles.Manager));
+});
+#endregion Identity and Persistence
 
 // Adding Saml authentication service
 #region Saml2 Auth
@@ -142,6 +173,19 @@ builder.Services.AddSwaggerWithBearerSupport(
 // builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
+#region Identity and Persistence
+await using (var scope = app.Services.CreateAsyncScope())
+{
+    var database = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await database.Database.MigrateAsync();
+
+    if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
+    {
+        await scope.ServiceProvider.GetRequiredService<IdentityDataSeeder>().SeedAsync();
+    }
+}
+#endregion Identity and Persistence
 
 // Configure the HTTP request pipeline.
 #region Error Handling

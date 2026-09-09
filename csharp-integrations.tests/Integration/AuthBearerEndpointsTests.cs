@@ -1,7 +1,10 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using csharp_integrations.api.Data;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace csharp_integrations.tests.Integration;
 
@@ -10,6 +13,23 @@ namespace csharp_integrations.tests.Integration;
 /// </summary>
 public sealed class AuthBearerEndpointsTests
 {
+    /// <summary>
+    /// Verifies that demonstration users are persisted with Identity password hashes.
+    /// </summary>
+    [Fact]
+    public async Task SeededUser_HasPasswordHashAndAssignedRole()
+    {
+        using var factory = new ApiFactory();
+        using var scope = factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+        var user = await userManager.FindByNameAsync("Josh");
+
+        Assert.NotNull(user);
+        Assert.False(string.IsNullOrWhiteSpace(user.PasswordHash));
+        Assert.True(await userManager.IsInRoleAsync(user, ApplicationRoles.Manager));
+    }
+
     /// <summary>
     /// Verifies that demonstration credentials produce an access token.
     /// </summary>
@@ -21,7 +41,7 @@ public sealed class AuthBearerEndpointsTests
 
         var response = await client.PostAsJsonAsync(
             "/Auth/Bearer/AuthBearer/Login",
-            new { username = "Josh", password = "123" });
+            new { username = "Josh", password = "Demo#123" });
 
         response.EnsureSuccessStatusCode();
         var result = await response.Content.ReadFromJsonAsync<LoginResult>();
@@ -45,7 +65,7 @@ public sealed class AuthBearerEndpointsTests
         var client = CreateHttpsClient(factory, handleCookies: false);
         var loginResponse = await client.PostAsJsonAsync(
             "/Auth/Bearer/AuthBearer/Login",
-            new { username = "Josh", password = "123" });
+            new { username = "Josh", password = "Demo#123" });
         var originalRefreshToken = GetRefreshTokenValue(loginResponse);
 
         var refreshResponse = await client.SendAsync(CreateRefreshRequest(originalRefreshToken));
@@ -69,7 +89,7 @@ public sealed class AuthBearerEndpointsTests
         var client = CreateHttpsClient(factory, handleCookies: false);
         var loginResponse = await client.PostAsJsonAsync(
             "/Auth/Bearer/AuthBearer/Login",
-            new { username = "Josh", password = "123" });
+            new { username = "Josh", password = "Demo#123" });
         var refreshToken = GetRefreshTokenValue(loginResponse);
         var logoutRequest = new HttpRequestMessage(HttpMethod.Post, "/Auth/Bearer/AuthBearer/Logout");
         logoutRequest.Headers.Add("Cookie", $"refresh_token={refreshToken}");
@@ -95,6 +115,29 @@ public sealed class AuthBearerEndpointsTests
             new { username = "Josh", password = "invalid" });
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    /// <summary>
+    /// Verifies that a user without the manager role cannot download models.
+    /// </summary>
+    [Fact]
+    public async Task DownloadModel_WithEmployeeAccessToken_ReturnsForbidden()
+    {
+        using var factory = new ApiFactory();
+        var client = CreateHttpsClient(factory);
+        var loginResponse = await client.PostAsJsonAsync(
+            "/Auth/Bearer/AuthBearer/Login",
+            new { username = "Alice", password = "Demo#123" });
+        var login = await loginResponse.Content.ReadFromJsonAsync<LoginResult>();
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/Ollama/models/download")
+        {
+            Content = JsonContent.Create(new { model = "test-model" })
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", login!.AccessToken);
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     /// <summary>
@@ -145,7 +188,7 @@ public sealed class AuthBearerEndpointsTests
         var client = CreateHttpsClient(factory);
         var loginResponse = await client.PostAsJsonAsync(
             "/Auth/Bearer/AuthBearer/Login",
-            new { username = "Josh", password = "123" });
+            new { username = "Josh", password = "Demo#123" });
         var login = await loginResponse.Content.ReadFromJsonAsync<LoginResult>();
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/Ollama/chat")
         {

@@ -1,5 +1,9 @@
+using csharp_integrations.api.Data;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
 namespace csharp_integrations.tests.Integration;
@@ -9,6 +13,8 @@ namespace csharp_integrations.tests.Integration;
 /// </summary>
 public sealed class ApiFactory : WebApplicationFactory<Program>
 {
+    private readonly string _connectionString = $"Data Source=csharp-integrations.tests.{Guid.NewGuid():N}.db";
+
     static ApiFactory()
     {
         Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", "Testing");
@@ -27,6 +33,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        builder.ConfigureServices(services =>
+        {
+            services.RemoveAll<DbContextOptions<ApplicationDbContext>>();
+            services.RemoveAll<ApplicationDbContext>();
+            services.AddDbContext<ApplicationDbContext>(options => options.UseSqlite(_connectionString));
+        });
         builder.ConfigureLogging(logging => logging.ClearProviders());
     }
 }

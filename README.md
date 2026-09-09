@@ -14,14 +14,14 @@ csharp-integrations.tests  # Testes unitários e de integração
 
 ### Autenticação e autorização
 
-- Login de demonstração com emissão de access token JWT.
+- Login com ASP.NET Identity, persistência SQLite e emissão de access token JWT.
+- Usuários de demonstração seedados somente nos ambientes Development e Testing, com senha armazenada em hash.
 - Access token curto e refresh token opaco em cookie `HttpOnly` e `Secure`.
 - Rotação de refresh token, hash no armazenamento e revogação da família em caso de reutilização ou logout.
 - Validação de assinatura, emissor, audiência e expiração do JWT.
-- Proteção de endpoints com `[Authorize]`.
+- Proteção de endpoints com `[Authorize]`, roles e policies; o download de modelos exige a role `manager`.
 - Integração SAML 2.0 opcional: só é registrada quando toda a configuração obrigatória está presente.
 - Validação de `returnUrl` no fluxo SAML para impedir redirecionamentos externos não autorizados.
-- Usuários em memória exclusivamente como seed de demonstração; não representam uma implementação de identidade para produção.
 
 ### Inteligência artificial
 
@@ -44,9 +44,9 @@ csharp-integrations.tests  # Testes unitários e de integração
 
 ### Qualidade e testes
 
-- Testes unitários para geração de token, extração de claims e repositório de usuários de demonstração.
+- Testes unitários para geração de token, extração de claims e rotação de refresh tokens.
 - Testes de integração executando a API em memória.
-- Cobertura inicial de login, credenciais inválidas, endpoints protegidos e rate limit.
+- Cobertura de login, credenciais inválidas, refresh/logout, roles, endpoints protegidos e rate limit.
 - Configuração determinística nos testes, sem depender de User Secrets ou de uma instância real do Ollama.
 
 ## Executar localmente
@@ -74,11 +74,13 @@ dotnet test
 
 Em desenvolvimento, o Swagger fica disponível na rota `/swagger` da URL exibida pela aplicação.
 
+Os usuários de demonstração para testes no Swagger são `Josh` / `Demo#123` (manager) e `Alice` / `Demo#123` (employee). Eles são criados apenas em Development e Testing.
+
 ## Configuração
 
 `Issuer` e `Audience` do JWT podem ficar no `appsettings.json`, pois são identificadores públicos do token. A chave `BearerToken:ApiKey` deve ficar em User Secrets no desenvolvimento e em um gerenciador de segredos no ambiente de produção.
 
-O access token dura cinco minutos por padrão e o refresh token sete dias; ambos podem ser ajustados por `BearerToken:AccessTokenMinutes` e `BearerToken:RefreshTokenDays`. O armazenamento de refresh tokens atual é em memória e serve à demonstração: os tokens são perdidos ao reiniciar a API. Uma implementação de produção deve persistir somente os hashes em banco de dados ou cache distribuído.
+O access token dura cinco minutos por padrão e o refresh token sete dias; ambos podem ser ajustados por `BearerToken:AccessTokenMinutes` e `BearerToken:RefreshTokenDays`. A connection string SQLite fica em `ConnectionStrings:DefaultConnection`; as migrations são aplicadas na inicialização e somente hashes de refresh token são persistidos.
 
 Configurações de CORS, Ollama e SAML são opcionais conforme a integração utilizada. Para habilitar SAML, informe todos os campos obrigatórios da seção `SAML`; uma configuração parcial gera erro propositalmente, evitando um fluxo de autenticação incompleto. Para um frontend em outra origem usar o cookie de refresh, configure `Cors:AllowedOrigins`, habilite `Cors:AllowCredentials` e envie as requisições com credenciais.
 
@@ -88,10 +90,9 @@ Este repositório foi pensado como uma vitrine incremental. As categorias abaixo
 
 ### Identidade
 
-- Refresh tokens, rotação, revogação e logout.
 - OAuth 2.0 e OpenID Connect.
 - Provedores sociais e autenticação baseada em API keys.
-- Persistência de usuários, hash de senha, papéis e policies.
+- Confirmação de e-mail, recuperação de senha e MFA.
 
 ### Serviços e integrações
 
