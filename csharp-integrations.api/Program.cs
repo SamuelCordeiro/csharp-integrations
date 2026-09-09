@@ -52,12 +52,7 @@ builder.Services
     .AddSignInManager()
     .AddDefaultTokenProviders();
 builder.Services.AddScoped<IdentityDataSeeder>();
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("CanManageModels", policy => policy
-        .RequireAuthenticatedUser()
-        .RequireRole(ApplicationRoles.Manager));
-});
+builder.Services.AddAuthorization(ApplicationAuthorizationPolicies.Configure);
 #endregion Identity and Persistence
 
 // Adding Saml authentication service

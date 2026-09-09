@@ -74,7 +74,7 @@ dotnet test
 
 Em desenvolvimento, o Swagger fica disponível na rota `/swagger` da URL exibida pela aplicação.
 
-Os usuários de demonstração para testes no Swagger são `Josh` / `Demo#123` (manager) e `Alice` / `Demo#123` (employee). Eles são criados apenas em Development e Testing.
+Os usuários de demonstração para testes no Swagger são `Josh` / `Demo#123` (manager), `Alice` / `Demo#123` (employee) e `Admin` / `Demo#123` (administrator). Eles são criados apenas em Development e Testing.
 
 ## Configuração
 

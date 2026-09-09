@@ -14,20 +14,24 @@ namespace csharp_integrations.tests.Integration;
 public sealed class AuthBearerEndpointsTests
 {
     /// <summary>
-    /// Verifies that demonstration users are persisted with Identity password hashes.
+    /// Verifies that demonstration users are persisted with Identity password hashes and roles.
     /// </summary>
     [Fact]
-    public async Task SeededUser_HasPasswordHashAndAssignedRole()
+    public async Task SeededUsers_HavePasswordHashesAndAssignedRoles()
     {
         using var factory = new ApiFactory();
         using var scope = factory.Services.CreateScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
-        var user = await userManager.FindByNameAsync("Josh");
+        var manager = await userManager.FindByNameAsync("Josh");
+        var administrator = await userManager.FindByNameAsync("Admin");
 
-        Assert.NotNull(user);
-        Assert.False(string.IsNullOrWhiteSpace(user.PasswordHash));
-        Assert.True(await userManager.IsInRoleAsync(user, ApplicationRoles.Manager));
+        Assert.NotNull(manager);
+        Assert.NotNull(administrator);
+        Assert.False(string.IsNullOrWhiteSpace(manager.PasswordHash));
+        Assert.False(string.IsNullOrWhiteSpace(administrator.PasswordHash));
+        Assert.True(await userManager.IsInRoleAsync(manager, ApplicationRoles.Manager));
+        Assert.True(await userManager.IsInRoleAsync(administrator, ApplicationRoles.Administrator));
     }
 
     /// <summary>

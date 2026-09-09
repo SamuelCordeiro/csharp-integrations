@@ -14,4 +14,9 @@ public static class ApplicationRoles
     /// Grants access to model management operations.
     /// </summary>
     public const string Manager = "manager";
+
+    /// <summary>
+    /// Grants access to identity administration operations.
+    /// </summary>
+    public const string Administrator = "administrator";
 }

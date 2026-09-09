@@ -1,4 +1,5 @@
 using System.Text;
+using csharp_integrations.api.Data;
 using csharp_integrations.core.AI.Providers.Ollama.Models;
 using csharp_integrations.core.AI.Providers.Ollama.Services;
 using csharp_integrations.core.AI.Providers.Ollama.Options;
@@ -58,7 +59,7 @@ public class OllamaController : ControllerBase
     /// Downloads a model to the Ollama server.
     /// </summary>
     [HttpPost("models/download")]
-    [Authorize(Policy = "CanManageModels")]
+    [Authorize(Policy = ApplicationAuthorizationPolicies.CanManageModels)]
     [EnableRateLimiting("ollama-download")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

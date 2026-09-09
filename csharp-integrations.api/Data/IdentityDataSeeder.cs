@@ -16,8 +16,10 @@ public sealed class IdentityDataSeeder(
     {
         await EnsureRoleAsync(ApplicationRoles.Employee);
         await EnsureRoleAsync(ApplicationRoles.Manager);
+        await EnsureRoleAsync(ApplicationRoles.Administrator);
         await EnsureUserAsync("Josh", "Demo#123", ApplicationRoles.Manager);
         await EnsureUserAsync("Alice", "Demo#123", ApplicationRoles.Employee);
+        await EnsureUserAsync("Admin", "Demo#123", ApplicationRoles.Administrator);
     }
 
     private async Task EnsureRoleAsync(string roleName)
