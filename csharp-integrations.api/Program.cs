@@ -46,16 +46,15 @@ builder.Services
         options.Password.RequireNonAlphanumeric = false;
         options.Password.RequiredUniqueChars = 1;
         options.Lockout.AllowedForNewUsers = true;
-        options.Lockout.MaxFailedAccessAttempts = 5;
     })
     .AddRoles<IdentityRole<int>>()
     .AddEntityFrameworkStores<ApplicationDbContext>()
-    .AddSignInManager()
     .AddDefaultTokenProviders();
 builder.Services.AddScoped<IdentityDataSeeder>();
 builder.Services.AddScoped<PasswordPolicyDataSeeder>();
 builder.Services.AddScoped<PasswordPolicyService>();
 builder.Services.AddScoped<IPasswordValidator<ApplicationUser>, PasswordPolicyValidator>();
+builder.Services.AddScoped<IdentityAuthenticationService>();
 builder.Services.AddAuthorization(ApplicationAuthorizationPolicies.Configure);
 #endregion Identity and Persistence
 

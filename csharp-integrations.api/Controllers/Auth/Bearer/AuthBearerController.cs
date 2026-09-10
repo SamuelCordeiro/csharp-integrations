@@ -16,7 +16,7 @@ public class AuthBearerController(
     RefreshTokenService refreshTokenService,
     TokenService tokenService,
     UserManager<ApplicationUser> userManager,
-    SignInManager<ApplicationUser> signInManager,
+    IdentityAuthenticationService identityAuthenticationService,
     IConfiguration configuration) : Controller
 {
     private const string RefreshTokenCookieName = "refresh_token";
@@ -37,19 +37,13 @@ public class AuthBearerController(
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest model)
     {
-        var user = await userManager.FindByNameAsync(model.Username);
-
-        if (user is null)
+        var authenticationResult = await identityAuthenticationService.AuthenticateAsync(model.Username, model.Password);
+        if (authenticationResult.Status != PasswordAuthenticationStatus.Succeeded || authenticationResult.User is null)
         {
             return Unauthorized();
         }
 
-        var signInResult = await signInManager.CheckPasswordSignInAsync(user, model.Password, lockoutOnFailure: true);
-        if (!signInResult.Succeeded)
-        {
-            return Unauthorized();
-        }
-
+        var user = authenticationResult.User;
         var refreshTokenIssue = await refreshTokenService.CreateAsync(user.Id, user.UserName!);
         var roles = await userManager.GetRolesAsync(user);
         SetRefreshTokenCookie(refreshTokenIssue);
