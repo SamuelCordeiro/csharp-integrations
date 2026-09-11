@@ -101,14 +101,15 @@ public sealed class UserManagementService(UserManager<ApplicationUser> userManag
 
     private async Task<bool> IsLastActiveAdministratorAsync(ApplicationUser user)
     {
-        if (user.LockoutEnd > DateTimeOffset.UtcNow)
+        if (!user.IsActive || user.LockoutEnd > DateTimeOffset.UtcNow)
         {
             return false;
         }
 
         var administrators = await userManager.GetUsersInRoleAsync(ApplicationRoles.Administrator);
         var activeAdministratorCount = administrators.Count(administrator =>
-            administrator.LockoutEnd is null || administrator.LockoutEnd <= DateTimeOffset.UtcNow);
+            administrator.IsActive
+            && (administrator.LockoutEnd is null || administrator.LockoutEnd <= DateTimeOffset.UtcNow));
 
         return activeAdministratorCount == 1;
     }

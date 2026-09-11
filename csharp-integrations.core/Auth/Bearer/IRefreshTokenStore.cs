@@ -26,4 +26,9 @@ public interface IRefreshTokenStore
         string tokenHash,
         DateTime now,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Revokes all refresh tokens issued for a user.
+    /// </summary>
+    Task RevokeUserTokensAsync(int userId, DateTime now, CancellationToken cancellationToken = default);
 }

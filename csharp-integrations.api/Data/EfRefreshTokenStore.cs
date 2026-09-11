@@ -79,6 +79,16 @@ public sealed class EfRefreshTokenStore(ApplicationDbContext database) : IRefres
         return true;
     }
 
+    /// <inheritdoc />
+    public async Task RevokeUserTokensAsync(int userId, DateTime now, CancellationToken cancellationToken = default)
+    {
+        await database.RefreshTokens
+            .Where(token => token.UserId == userId && token.RevokedAtUtc == null)
+            .ExecuteUpdateAsync(
+                updates => updates.SetProperty(token => token.RevokedAtUtc, now),
+                cancellationToken);
+    }
+
     private static RefreshTokenEntity ToEntity(RefreshTokenRecord token) => new()
     {
         TokenHash = token.TokenHash,

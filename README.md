@@ -88,6 +88,8 @@ Administradores podem consultar usuários com paginação e filtros por username
 
 Administradores também podem criar usuários e substituir suas roles em `/api/admin/users`. Somente as roles suportadas pela aplicação são aceitas, e a remoção da role do último administrador ativo é bloqueada.
 
+Administradores podem bloquear temporariamente, desbloquear, desativar e reativar usuários. A desativação lógica impede login e renovação de token até a reativação; ela também revoga os refresh tokens existentes. O último administrador ativo não pode ser bloqueado ou desativado.
+
 Configurações de CORS, Ollama e SAML são opcionais conforme a integração utilizada. Para habilitar SAML, informe todos os campos obrigatórios da seção `SAML`; uma configuração parcial gera erro propositalmente, evitando um fluxo de autenticação incompleto. Para um frontend em outra origem usar o cookie de refresh, configure `Cors:AllowedOrigins`, habilite `Cors:AllowCredentials` e envie as requisições com credenciais.
 
 ## Expansão planejada

@@ -28,6 +28,11 @@ public sealed class IdentityAuthenticationService(
             return CreateResult(PasswordAuthenticationStatus.InvalidCredentials);
         }
 
+        if (!user.IsActive)
+        {
+            return CreateResult(PasswordAuthenticationStatus.InvalidCredentials);
+        }
+
         if (await userManager.IsLockedOutAsync(user))
         {
             return CreateResult(PasswordAuthenticationStatus.LockedOut);

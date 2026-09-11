@@ -71,7 +71,7 @@ public class AuthBearerController(
         }
 
         var user = await userManager.FindByIdAsync(refreshResult.RefreshTokenIssue.UserId.ToString());
-        if (user is null)
+        if (user is null || !user.IsActive)
         {
             await refreshTokenService.RevokeAsync(refreshResult.RefreshTokenIssue.RefreshToken);
             DeleteRefreshTokenCookie();

@@ -82,6 +82,16 @@ public sealed class RefreshTokenService(
                && await refreshTokenStore.RevokeFamilyAsync(HashToken(refreshToken), DateTime.UtcNow, cancellationToken);
     }
 
+    /// <summary>
+    /// Revokes all refresh tokens issued for a user.
+    /// </summary>
+    /// <param name="userId">User identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public Task RevokeUserTokensAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        return refreshTokenStore.RevokeUserTokensAsync(userId, DateTime.UtcNow, cancellationToken);
+    }
+
     private RefreshTokenIssue CreateRefreshTokenIssue(
         int userId,
         string username,

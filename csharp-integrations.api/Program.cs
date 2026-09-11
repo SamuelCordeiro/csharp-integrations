@@ -7,6 +7,7 @@ using csharp_integrations.api.Infrastructure;
 using csharp_integrations.api.Data;
 using ITfoxtec.Identity.Saml2.MvcCore.Configuration;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using System.Threading.RateLimiting;
 
@@ -57,7 +58,31 @@ builder.Services.AddScoped<IPasswordValidator<ApplicationUser>, PasswordPolicyVa
 builder.Services.AddScoped<IdentityAuthenticationService>();
 builder.Services.AddScoped<UserAdministrationService>();
 builder.Services.AddScoped<UserManagementService>();
+builder.Services.AddScoped<UserAccessManagementService>();
 builder.Services.AddAuthorization(ApplicationAuthorizationPolicies.Configure);
+builder.Services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+{
+    options.Events ??= new JwtBearerEvents();
+    options.Events.OnTokenValidated = async context =>
+    {
+        var userIdClaim = context.Principal?.FindFirst("Id");
+        if (!int.TryParse(userIdClaim?.Value, out var userId))
+        {
+            context.Fail("User identifier is invalid.");
+            return;
+        }
+
+        var database = context.HttpContext.RequestServices.GetRequiredService<ApplicationDbContext>();
+        var isActive = await database.Users
+            .AsNoTracking()
+            .AnyAsync(user => user.Id == userId && user.IsActive, context.HttpContext.RequestAborted);
+
+        if (!isActive)
+        {
+            context.Fail("User is inactive.");
+        }
+    };
+});
 #endregion Identity and Persistence
 
 // Adding Saml authentication service

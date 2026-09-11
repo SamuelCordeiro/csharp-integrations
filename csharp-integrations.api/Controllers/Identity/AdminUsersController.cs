@@ -13,7 +13,8 @@ namespace csharp_integrations.api.Controllers.Identity;
 [Authorize(Policy = ApplicationAuthorizationPolicies.ManageUsers)]
 public sealed class AdminUsersController(
     UserAdministrationService userAdministrationService,
-    UserManagementService userManagementService) : ControllerBase
+    UserManagementService userManagementService,
+    UserAccessManagementService userAccessManagementService) : ControllerBase
 {
     /// <summary>
     /// Creates a user with application roles.
@@ -115,6 +116,74 @@ public sealed class AdminUsersController(
         return failure is null ? NoContent() : failure;
     }
 
+    /// <summary>
+    /// Temporarily locks a user.
+    /// </summary>
+    /// <param name="userId">User identifier.</param>
+    /// <param name="request">Lockout duration.</param>
+    /// <returns>No content when the user is locked.</returns>
+    [HttpPost("{userId:int}/lock")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> LockUser(int userId, [FromBody] LockUserRequest? request)
+    {
+        var result = await userAccessManagementService.LockAsync(
+            userId,
+            TimeSpan.FromMinutes(request?.DurationMinutes ?? LockUserRequest.DefaultDurationMinutes));
+
+        return CreateAccessResult(result);
+    }
+
+    /// <summary>
+    /// Clears a user's temporary lockout.
+    /// </summary>
+    /// <param name="userId">User identifier.</param>
+    /// <returns>No content when the user is unlocked.</returns>
+    [HttpPost("{userId:int}/unlock")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> UnlockUser(int userId)
+    {
+        return CreateAccessResult(await userAccessManagementService.UnlockAsync(userId));
+    }
+
+    /// <summary>
+    /// Disables a user until an administrator enables the account.
+    /// </summary>
+    /// <param name="userId">User identifier.</param>
+    /// <returns>No content when the user is disabled.</returns>
+    [HttpPost("{userId:int}/disable")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> DisableUser(int userId)
+    {
+        return CreateAccessResult(await userAccessManagementService.DisableAsync(userId));
+    }
+
+    /// <summary>
+    /// Enables a previously disabled user.
+    /// </summary>
+    /// <param name="userId">User identifier.</param>
+    /// <returns>No content when the user is enabled.</returns>
+    [HttpPost("{userId:int}/enable")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> EnableUser(int userId)
+    {
+        return CreateAccessResult(await userAccessManagementService.EnableAsync(userId));
+    }
+
     private ActionResult? CreateFailureResult(UserManagementResult result)
     {
         return result.Status switch
@@ -139,6 +208,43 @@ public sealed class AdminUsersController(
             _ => throw new InvalidOperationException("Unknown user management status.")
         };
     }
+
+    private IActionResult CreateAccessResult(UserAccessManagementResult result)
+    {
+        return result.Status switch
+        {
+            UserAccessManagementStatus.Succeeded => NoContent(),
+            UserAccessManagementStatus.NotFound => Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "User not found."),
+            UserAccessManagementStatus.LastActiveAdministrator => Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "The last active administrator cannot be locked or disabled."),
+            UserAccessManagementStatus.ValidationFailed => ValidationProblem(new ValidationProblemDetails(
+                new Dictionary<string, string[]>
+                {
+                    ["identity"] = result.Errors.Select(error => error.Description).ToArray()
+                })),
+            _ => throw new InvalidOperationException("Unknown user access management status.")
+        };
+    }
+}
+
+/// <summary>
+/// Represents an administrative lockout request.
+/// </summary>
+public sealed class LockUserRequest
+{
+    /// <summary>
+    /// Defines the default temporary lockout duration.
+    /// </summary>
+    public const int DefaultDurationMinutes = 30;
+
+    /// <summary>
+    /// Gets the temporary lockout duration in minutes.
+    /// </summary>
+    [Range(1, 1440)]
+    public int DurationMinutes { get; init; } = DefaultDurationMinutes;
 }
 
 /// <summary>
@@ -273,6 +379,16 @@ public sealed class UserResponse
     public required string Status { get; init; }
 
     /// <summary>
+    /// Gets whether the user can authenticate.
+    /// </summary>
+    public required bool IsActive { get; init; }
+
+    /// <summary>
+    /// Gets the UTC date when the user was disabled.
+    /// </summary>
+    public DateTime? DisabledAtUtc { get; init; }
+
+    /// <summary>
     /// Gets the UTC lockout expiration when the account is locked.
     /// </summary>
     public DateTime? LockoutEndUtc { get; init; }
@@ -303,6 +419,8 @@ public sealed class UserResponse
         Username = user.Username,
         Roles = user.Roles,
         Status = user.Status,
+        IsActive = user.IsActive,
+        DisabledAtUtc = user.DisabledAtUtc,
         LockoutEndUtc = user.LockoutEndUtc,
         AccessFailedCount = user.AccessFailedCount,
         CreatedAtUtc = user.CreatedAtUtc,

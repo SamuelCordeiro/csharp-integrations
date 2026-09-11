@@ -115,12 +115,24 @@ public sealed class UserAdministrationService(ApplicationDbContext database)
             Id = user.Id,
             Username = user.UserName ?? string.Empty,
             Roles = rolesByUserId.GetValueOrDefault(user.Id, []),
-            Status = user.LockoutEnd > DateTimeOffset.UtcNow ? "Locked" : "Available",
+            Status = GetStatus(user),
+            IsActive = user.IsActive,
+            DisabledAtUtc = user.DisabledAtUtc,
             LockoutEndUtc = user.LockoutEnd?.UtcDateTime,
             AccessFailedCount = user.AccessFailedCount,
             CreatedAtUtc = user.CreatedAtUtc,
             UpdatedAtUtc = user.UpdatedAtUtc
         };
+    }
+
+    private static string GetStatus(ApplicationUser user)
+    {
+        if (!user.IsActive)
+        {
+            return "Disabled";
+        }
+
+        return user.LockoutEnd > DateTimeOffset.UtcNow ? "Locked" : "Available";
     }
 
     private static void ValidateQuery(UserAdministrationQuery query)
@@ -207,6 +219,16 @@ public sealed class UserAdministrationUser
     /// Gets the current account availability status.
     /// </summary>
     public required string Status { get; init; }
+
+    /// <summary>
+    /// Gets whether the user can authenticate.
+    /// </summary>
+    public required bool IsActive { get; init; }
+
+    /// <summary>
+    /// Gets the UTC date when the user was disabled.
+    /// </summary>
+    public DateTime? DisabledAtUtc { get; init; }
 
     /// <summary>
     /// Gets the UTC lockout expiration when the account is locked.

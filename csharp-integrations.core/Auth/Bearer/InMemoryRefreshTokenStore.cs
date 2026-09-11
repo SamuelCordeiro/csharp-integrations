@@ -89,6 +89,22 @@ public sealed class InMemoryRefreshTokenStore : IRefreshTokenStore
         }
     }
 
+    /// <inheritdoc />
+    public Task RevokeUserTokensAsync(int userId, DateTime now, CancellationToken cancellationToken = default)
+    {
+        lock (_lock)
+        {
+            RemoveExpiredTokens(now);
+
+            foreach (var refreshToken in _tokens.Values.Where(token => token.UserId == userId))
+            {
+                refreshToken.RevokedAtUtc ??= now;
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
     private void RevokeFamily(Guid familyId, DateTime now)
     {
         foreach (var refreshToken in _tokens.Values.Where(token => token.FamilyId == familyId))
