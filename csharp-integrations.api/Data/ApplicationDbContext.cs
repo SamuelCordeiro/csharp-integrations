@@ -21,9 +21,31 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<PasswordPolicy> PasswordPolicies => Set<PasswordPolicy>();
 
     /// <inheritdoc />
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        SetUserTimestamps();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    /// <inheritdoc />
+    public override Task<int> SaveChangesAsync(
+        bool acceptAllChangesOnSuccess,
+        CancellationToken cancellationToken = default)
+    {
+        SetUserTimestamps();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        builder.Entity<ApplicationUser>(entity =>
+        {
+            entity.Property(user => user.CreatedAtUtc).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(user => user.UpdatedAtUtc).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
 
         builder.Entity<RefreshTokenEntity>(entity =>
         {
@@ -49,5 +71,23 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
                 table.HasCheckConstraint("CK_PasswordPolicies_LockoutDurationMinutes", "LockoutDurationMinutes >= 1");
             });
         });
+    }
+
+    private void SetUserTimestamps()
+    {
+        var now = DateTime.UtcNow;
+
+        foreach (var entry in ChangeTracker.Entries<ApplicationUser>())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                entry.Entity.CreatedAtUtc = now;
+                entry.Entity.UpdatedAtUtc = now;
+            }
+            else if (entry.State == EntityState.Modified)
+            {
+                entry.Entity.UpdatedAtUtc = now;
+            }
+        }
     }
 }

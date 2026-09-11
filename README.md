@@ -84,6 +84,8 @@ O access token dura cinco minutos por padrão e o refresh token sete dias; ambos
 
 A política ativa de senha e lockout é persistida na tabela `PasswordPolicies`, inicializada com requisitos seguros e aplicada dinamicamente em criações, alterações de senha e tentativas de login. Administradores podem consultá-la e atualizá-la em `/api/admin/password-policy`.
 
+Administradores podem consultar usuários com paginação e filtros por username ou role em `/api/admin/users`. As respostas não expõem hashes, stamps ou outros dados internos do ASP.NET Identity.
+
 Configurações de CORS, Ollama e SAML são opcionais conforme a integração utilizada. Para habilitar SAML, informe todos os campos obrigatórios da seção `SAML`; uma configuração parcial gera erro propositalmente, evitando um fluxo de autenticação incompleto. Para um frontend em outra origem usar o cookie de refresh, configure `Cors:AllowedOrigins`, habilite `Cors:AllowCredentials` e envie as requisições com credenciais.
 
 ## Expansão planejada
