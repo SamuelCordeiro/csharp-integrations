@@ -86,6 +86,8 @@ A política ativa de senha e lockout é persistida na tabela `PasswordPolicies`,
 
 Administradores podem consultar usuários com paginação e filtros por username ou role em `/api/admin/users`. As respostas não expõem hashes, stamps ou outros dados internos do ASP.NET Identity.
 
+Administradores também podem criar usuários e substituir suas roles em `/api/admin/users`. Somente as roles suportadas pela aplicação são aceitas, e a remoção da role do último administrador ativo é bloqueada.
+
 Configurações de CORS, Ollama e SAML são opcionais conforme a integração utilizada. Para habilitar SAML, informe todos os campos obrigatórios da seção `SAML`; uma configuração parcial gera erro propositalmente, evitando um fluxo de autenticação incompleto. Para um frontend em outra origem usar o cookie de refresh, configure `Cors:AllowedOrigins`, habilite `Cors:AllowCredentials` e envie as requisições com credenciais.
 
 ## Expansão planejada

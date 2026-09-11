@@ -56,6 +56,7 @@ builder.Services.AddScoped<PasswordPolicyService>();
 builder.Services.AddScoped<IPasswordValidator<ApplicationUser>, PasswordPolicyValidator>();
 builder.Services.AddScoped<IdentityAuthenticationService>();
 builder.Services.AddScoped<UserAdministrationService>();
+builder.Services.AddScoped<UserManagementService>();
 builder.Services.AddAuthorization(ApplicationAuthorizationPolicies.Configure);
 #endregion Identity and Persistence
 

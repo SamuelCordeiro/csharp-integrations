@@ -11,8 +11,36 @@ namespace csharp_integrations.api.Controllers.Identity;
 [ApiController]
 [Route("api/admin/users")]
 [Authorize(Policy = ApplicationAuthorizationPolicies.ManageUsers)]
-public sealed class AdminUsersController(UserAdministrationService userAdministrationService) : ControllerBase
+public sealed class AdminUsersController(
+    UserAdministrationService userAdministrationService,
+    UserManagementService userManagementService) : ControllerBase
 {
+    /// <summary>
+    /// Creates a user with application roles.
+    /// </summary>
+    /// <param name="request">User creation data.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The created user.</returns>
+    [HttpPost]
+    [ProducesResponseType(typeof(UserResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<UserResponse>> CreateUser(
+        [FromBody] CreateUserRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await userManagementService.CreateAsync(request.Username, request.Password, request.Roles);
+        var failure = CreateFailureResult(result);
+        if (failure is not null)
+        {
+            return failure;
+        }
+
+        var user = await userAdministrationService.GetUserAsync(result.UserId!.Value, cancellationToken);
+        return CreatedAtAction(nameof(GetUser), new { userId = user!.Id }, UserResponse.From(user));
+    }
+
     /// <summary>
     /// Gets a paged collection of users.
     /// </summary>
@@ -61,6 +89,95 @@ public sealed class AdminUsersController(UserAdministrationService userAdministr
 
         return Ok(UserResponse.From(user));
     }
+
+    /// <summary>
+    /// Replaces a user's application roles.
+    /// </summary>
+    /// <param name="userId">User identifier.</param>
+    /// <param name="request">Roles that must remain assigned.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>No content when the roles are updated.</returns>
+    [HttpPut("{userId:int}/roles")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> UpdateRoles(
+        int userId,
+        [FromBody] UpdateUserRolesRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await userManagementService.UpdateRolesAsync(userId, request.Roles);
+        var failure = CreateFailureResult(result);
+
+        return failure is null ? NoContent() : failure;
+    }
+
+    private ActionResult? CreateFailureResult(UserManagementResult result)
+    {
+        return result.Status switch
+        {
+            UserManagementStatus.Succeeded => null,
+            UserManagementStatus.NotFound => Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "User not found."),
+            UserManagementStatus.InvalidRoles => ValidationProblem(new ValidationProblemDetails(
+                new Dictionary<string, string[]>
+                {
+                    ["roles"] = ["One or more roles are not supported."]
+                })),
+            UserManagementStatus.LastActiveAdministrator => Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "The last active administrator must retain the administrator role."),
+            UserManagementStatus.ValidationFailed => ValidationProblem(new ValidationProblemDetails(
+                new Dictionary<string, string[]>
+                {
+                    ["identity"] = result.Errors.Select(error => error.Description).ToArray()
+                })),
+            _ => throw new InvalidOperationException("Unknown user management status.")
+        };
+    }
+}
+
+/// <summary>
+/// Represents user creation data.
+/// </summary>
+public sealed class CreateUserRequest
+{
+    /// <summary>
+    /// Gets the username.
+    /// </summary>
+    [Required]
+    [StringLength(256, MinimumLength = 1)]
+    public required string Username { get; init; }
+
+    /// <summary>
+    /// Gets the password validated by the active policy.
+    /// </summary>
+    [Required]
+    public required string Password { get; init; }
+
+    /// <summary>
+    /// Gets the roles assigned to the new user.
+    /// </summary>
+    [Required]
+    [MinLength(1)]
+    public required IReadOnlyList<string> Roles { get; init; }
+}
+
+/// <summary>
+/// Represents a user role update.
+/// </summary>
+public sealed class UpdateUserRolesRequest
+{
+    /// <summary>
+    /// Gets the roles that must remain assigned.
+    /// </summary>
+    [Required]
+    [MinLength(1)]
+    public required IReadOnlyList<string> Roles { get; init; }
 }
 
 /// <summary>

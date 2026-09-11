@@ -6,6 +6,11 @@ namespace csharp_integrations.api.Data;
 public static class ApplicationRoles
 {
     /// <summary>
+    /// Gets the roles supported by the application.
+    /// </summary>
+    public static IReadOnlyList<string> All { get; } = [Employee, Manager, Administrator];
+
+    /// <summary>
     /// Grants access to standard authenticated features.
     /// </summary>
     public const string Employee = "employee";
