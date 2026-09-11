@@ -90,6 +90,8 @@ Administradores também podem criar usuários e substituir suas roles em `/api/a
 
 Administradores podem bloquear temporariamente, desbloquear, desativar e reativar usuários. A desativação lógica impede login e renovação de token até a reativação; ela também revoga os refresh tokens existentes. O último administrador ativo não pode ser bloqueado ou desativado.
 
+Administradores podem iniciar a redefinição de senha. Quando um remetente de e-mail for integrado via `IPasswordResetNotifier`, o token é enviado somente por esse canal e nunca é retornado pela API ou escrito em logs. A redefinição exige uma senha válida pela política ativa e invalida os tokens anteriores.
+
 Configurações de CORS, Ollama e SAML são opcionais conforme a integração utilizada. Para habilitar SAML, informe todos os campos obrigatórios da seção `SAML`; uma configuração parcial gera erro propositalmente, evitando um fluxo de autenticação incompleto. Para um frontend em outra origem usar o cookie de refresh, configure `Cors:AllowedOrigins`, habilite `Cors:AllowCredentials` e envie as requisições com credenciais.
 
 ## Expansão planejada

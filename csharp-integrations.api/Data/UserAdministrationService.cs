@@ -118,6 +118,7 @@ public sealed class UserAdministrationService(ApplicationDbContext database)
             Status = GetStatus(user),
             IsActive = user.IsActive,
             DisabledAtUtc = user.DisabledAtUtc,
+            MustChangePassword = user.MustChangePassword,
             LockoutEndUtc = user.LockoutEnd?.UtcDateTime,
             AccessFailedCount = user.AccessFailedCount,
             CreatedAtUtc = user.CreatedAtUtc,
@@ -130,6 +131,11 @@ public sealed class UserAdministrationService(ApplicationDbContext database)
         if (!user.IsActive)
         {
             return "Disabled";
+        }
+
+        if (user.MustChangePassword)
+        {
+            return "PasswordChangeRequired";
         }
 
         return user.LockoutEnd > DateTimeOffset.UtcNow ? "Locked" : "Available";
@@ -229,6 +235,11 @@ public sealed class UserAdministrationUser
     /// Gets the UTC date when the user was disabled.
     /// </summary>
     public DateTime? DisabledAtUtc { get; init; }
+
+    /// <summary>
+    /// Gets whether the user must reset the password before using the API.
+    /// </summary>
+    public required bool MustChangePassword { get; init; }
 
     /// <summary>
     /// Gets the UTC lockout expiration when the account is locked.

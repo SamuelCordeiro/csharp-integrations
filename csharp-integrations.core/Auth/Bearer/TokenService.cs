@@ -42,7 +42,24 @@ public class TokenService
     /// <returns>The serialized JWT access token.</returns>
     public string GenerateAccessToken(int userId, string username, IEnumerable<string> roles)
     {
-        return Generate(userId, username, roles, GetAccessTokenLifetime().TotalMinutes);
+        return Generate(userId, username, roles, null, GetAccessTokenLifetime().TotalMinutes);
+    }
+
+    /// <summary>
+    /// Generates a signed JWT access token bound to the user's security stamp.
+    /// </summary>
+    /// <param name="userId">Authenticated user identifier.</param>
+    /// <param name="username">Authenticated username.</param>
+    /// <param name="roles">Roles assigned to the authenticated user.</param>
+    /// <param name="securityStamp">Security stamp used to invalidate previous tokens.</param>
+    /// <returns>The serialized JWT access token.</returns>
+    public string GenerateAccessToken(
+        int userId,
+        string username,
+        IEnumerable<string> roles,
+        string? securityStamp)
+    {
+        return Generate(userId, username, roles, securityStamp, GetAccessTokenLifetime().TotalMinutes);
     }
 
     /// <summary>
@@ -61,7 +78,12 @@ public class TokenService
         return TimeSpan.FromMinutes(minutes);
     }
 
-    private string Generate(int userId, string username, IEnumerable<string> roles, double minutesToExpire)
+    private string Generate(
+        int userId,
+        string username,
+        IEnumerable<string> roles,
+        string? securityStamp,
+        double minutesToExpire)
     {
         var handler = new JwtSecurityTokenHandler();
 
@@ -77,7 +99,7 @@ public class TokenService
 
         var tokenDescriptor = new SecurityTokenDescriptor
         {
-            Subject = GenerateClaims(userId, username, roles),
+            Subject = GenerateClaims(userId, username, roles, securityStamp),
             SigningCredentials = credentials,
             Expires = DateTime.UtcNow.AddMinutes(minutesToExpire),
             Issuer = issuer,
@@ -95,12 +117,21 @@ public class TokenService
     /// <param name="userId">Authenticated user identifier.</param>
     /// <param name="username">Authenticated username.</param>
     /// <param name="roles">Roles assigned to the authenticated user.</param>
+    /// <param name="securityStamp">Security stamp used to invalidate previous tokens.</param>
     /// <returns>An identity containing the user claims.</returns>
-    private static ClaimsIdentity GenerateClaims(int userId, string username, IEnumerable<string> roles)
+    private static ClaimsIdentity GenerateClaims(
+        int userId,
+        string username,
+        IEnumerable<string> roles,
+        string? securityStamp)
     {
         var ci = new ClaimsIdentity();
         ci.AddClaim(new Claim(ClaimTypes.Name, username));
         ci.AddClaim(new Claim(type: "Id", value: userId.ToString()));
+        if (!string.IsNullOrWhiteSpace(securityStamp))
+        {
+            ci.AddClaim(new Claim(type: "SecurityStamp", value: securityStamp));
+        }
         foreach (var role in roles)
         {
             ci.AddClaim(new Claim(ClaimTypes.Role, role));

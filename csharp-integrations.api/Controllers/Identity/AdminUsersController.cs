@@ -14,7 +14,8 @@ namespace csharp_integrations.api.Controllers.Identity;
 public sealed class AdminUsersController(
     UserAdministrationService userAdministrationService,
     UserManagementService userManagementService,
-    UserAccessManagementService userAccessManagementService) : ControllerBase
+    UserAccessManagementService userAccessManagementService,
+    PasswordResetService passwordResetService) : ControllerBase
 {
     /// <summary>
     /// Creates a user with application roles.
@@ -182,6 +183,41 @@ public sealed class AdminUsersController(
     public async Task<IActionResult> EnableUser(int userId)
     {
         return CreateAccessResult(await userAccessManagementService.EnableAsync(userId));
+    }
+
+    /// <summary>
+    /// Initiates a password reset through the configured notification channel.
+    /// </summary>
+    /// <param name="userId">User identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>No content when the reset notification is sent.</returns>
+    [HttpPost("{userId:int}/password-reset")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> RequestPasswordReset(int userId, CancellationToken cancellationToken)
+    {
+        var result = await passwordResetService.RequestAsync(userId, cancellationToken);
+
+        return result.Status switch
+        {
+            PasswordResetStatus.Succeeded => NoContent(),
+            PasswordResetStatus.NotFound => Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "User not found."),
+            PasswordResetStatus.DeliveryUnavailable => Problem(
+                statusCode: StatusCodes.Status503ServiceUnavailable,
+                title: "Password reset delivery is unavailable."),
+            PasswordResetStatus.ValidationFailed => ValidationProblem(new ValidationProblemDetails(
+                new Dictionary<string, string[]>
+                {
+                    ["identity"] = result.Errors.Select(error => error.Description).ToArray()
+                })),
+            _ => throw new InvalidOperationException("Unknown password reset status.")
+        };
     }
 
     private ActionResult? CreateFailureResult(UserManagementResult result)
@@ -389,6 +425,11 @@ public sealed class UserResponse
     public DateTime? DisabledAtUtc { get; init; }
 
     /// <summary>
+    /// Gets whether the user must reset the password before using the API.
+    /// </summary>
+    public required bool MustChangePassword { get; init; }
+
+    /// <summary>
     /// Gets the UTC lockout expiration when the account is locked.
     /// </summary>
     public DateTime? LockoutEndUtc { get; init; }
@@ -421,6 +462,7 @@ public sealed class UserResponse
         Status = user.Status,
         IsActive = user.IsActive,
         DisabledAtUtc = user.DisabledAtUtc,
+        MustChangePassword = user.MustChangePassword,
         LockoutEndUtc = user.LockoutEndUtc,
         AccessFailedCount = user.AccessFailedCount,
         CreatedAtUtc = user.CreatedAtUtc,

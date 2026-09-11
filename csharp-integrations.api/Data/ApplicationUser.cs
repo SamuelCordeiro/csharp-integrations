@@ -18,6 +18,11 @@ public sealed class ApplicationUser : IdentityUser<int>
     public DateTime? DisabledAtUtc { get; set; }
 
     /// <summary>
+    /// Gets or sets whether the user must reset the password before using the API.
+    /// </summary>
+    public bool MustChangePassword { get; set; }
+
+    /// <summary>
     /// Gets or sets the UTC date when the user was created.
     /// </summary>
     public DateTime CreatedAtUtc { get; set; }

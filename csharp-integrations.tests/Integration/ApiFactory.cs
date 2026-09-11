@@ -1,4 +1,5 @@
 using csharp_integrations.api.Data;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -38,6 +39,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             services.RemoveAll<DbContextOptions<ApplicationDbContext>>();
             services.RemoveAll<ApplicationDbContext>();
             services.AddDbContext<ApplicationDbContext>(options => options.UseSqlite(_connectionString));
+            services.AddSingleton<IPasswordResetNotifier, TestPasswordResetNotifier>();
+            services.AddDataProtection().UseEphemeralDataProtectionProvider();
         });
         builder.ConfigureLogging(logging => logging.ClearProviders());
     }

@@ -17,6 +17,7 @@ public class AuthBearerController(
     TokenService tokenService,
     UserManager<ApplicationUser> userManager,
     IdentityAuthenticationService identityAuthenticationService,
+    PasswordResetService passwordResetService,
     IConfiguration configuration) : Controller
 {
     private const string RefreshTokenCookieName = "refresh_token";
@@ -34,10 +35,16 @@ public class AuthBearerController(
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest model)
     {
         var authenticationResult = await identityAuthenticationService.AuthenticateAsync(model.Username, model.Password);
+        if (authenticationResult.Status == PasswordAuthenticationStatus.PasswordChangeRequired)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden);
+        }
+
         if (authenticationResult.Status != PasswordAuthenticationStatus.Succeeded || authenticationResult.User is null)
         {
             return Unauthorized();
@@ -71,7 +78,7 @@ public class AuthBearerController(
         }
 
         var user = await userManager.FindByIdAsync(refreshResult.RefreshTokenIssue.UserId.ToString());
-        if (user is null || !user.IsActive)
+        if (user is null || !user.IsActive || user.MustChangePassword)
         {
             await refreshTokenService.RevokeAsync(refreshResult.RefreshTokenIssue.RefreshToken);
             DeleteRefreshTokenCookie();
@@ -82,6 +89,45 @@ public class AuthBearerController(
         SetRefreshTokenCookie(refreshResult.RefreshTokenIssue);
 
         return Ok(CreateLoginResponse(user, roles));
+    }
+
+    /// <summary>
+    /// Resets a password using a token delivered through a configured notification channel.
+    /// </summary>
+    /// <param name="request">Password reset token and new password.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>No content when the password is reset.</returns>
+    [HttpPost("ResetPassword")]
+    [AllowAnonymous]
+    [EnableRateLimiting("authentication")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<IActionResult> ResetPassword(
+        [FromBody] ResetPasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await passwordResetService.ResetAsync(
+            request.UserId,
+            request.Token,
+            request.NewPassword,
+            cancellationToken);
+
+        return result.Status switch
+        {
+            PasswordResetStatus.Succeeded => NoContent(),
+            PasswordResetStatus.NotFound => ValidationProblem(new ValidationProblemDetails(
+                new Dictionary<string, string[]>
+                {
+                    ["reset"] = ["The password reset request is invalid."]
+                })),
+            PasswordResetStatus.ValidationFailed => ValidationProblem(new ValidationProblemDetails(
+                new Dictionary<string, string[]>
+                {
+                    ["reset"] = result.Errors.Select(error => error.Description).ToArray()
+                })),
+            _ => throw new InvalidOperationException("Unknown password reset status.")
+        };
     }
 
     /// <summary>
@@ -135,8 +181,32 @@ public class AuthBearerController(
         return new LoginResponse
         {
             Username = user.UserName!,
-            AccessToken = tokenService.GenerateAccessToken(user.Id, user.UserName!, roles),
+            AccessToken = tokenService.GenerateAccessToken(user.Id, user.UserName!, roles, user.SecurityStamp),
             ExpiresInSeconds = (int)tokenService.GetAccessTokenLifetime().TotalSeconds
         };
     }
+}
+
+/// <summary>
+/// Represents a password reset completion request.
+/// </summary>
+public sealed class ResetPasswordRequest
+{
+    /// <summary>
+    /// Gets the user identifier.
+    /// </summary>
+    [System.ComponentModel.DataAnnotations.Range(1, int.MaxValue)]
+    public int UserId { get; init; }
+
+    /// <summary>
+    /// Gets the sensitive password reset token.
+    /// </summary>
+    [System.ComponentModel.DataAnnotations.Required]
+    public required string Token { get; init; }
+
+    /// <summary>
+    /// Gets the new password validated by the active policy.
+    /// </summary>
+    [System.ComponentModel.DataAnnotations.Required]
+    public required string NewPassword { get; init; }
 }

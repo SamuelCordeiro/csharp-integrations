@@ -38,6 +38,11 @@ public sealed class IdentityAuthenticationService(
             return CreateResult(PasswordAuthenticationStatus.LockedOut);
         }
 
+        if (user.MustChangePassword)
+        {
+            return CreateResult(PasswordAuthenticationStatus.PasswordChangeRequired);
+        }
+
         if (!await userManager.CheckPasswordAsync(user, password))
         {
             var policy = await passwordPolicyService.GetAsync(cancellationToken);

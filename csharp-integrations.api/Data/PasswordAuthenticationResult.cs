@@ -34,5 +34,10 @@ public enum PasswordAuthenticationStatus
     /// <summary>
     /// Authentication was denied because the account is locked.
     /// </summary>
-    LockedOut
+    LockedOut,
+
+    /// <summary>
+    /// Authentication requires a password reset before access can be granted.
+    /// </summary>
+    PasswordChangeRequired
 }

@@ -59,6 +59,7 @@ builder.Services.AddScoped<IdentityAuthenticationService>();
 builder.Services.AddScoped<UserAdministrationService>();
 builder.Services.AddScoped<UserManagementService>();
 builder.Services.AddScoped<UserAccessManagementService>();
+builder.Services.AddScoped<PasswordResetService>();
 builder.Services.AddAuthorization(ApplicationAuthorizationPolicies.Configure);
 builder.Services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
 {
@@ -72,14 +73,18 @@ builder.Services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.Authenticatio
             return;
         }
 
+        var securityStamp = context.Principal?.FindFirst("SecurityStamp")?.Value;
         var database = context.HttpContext.RequestServices.GetRequiredService<ApplicationDbContext>();
-        var isActive = await database.Users
+        var user = await database.Users
             .AsNoTracking()
-            .AnyAsync(user => user.Id == userId && user.IsActive, context.HttpContext.RequestAborted);
+            .SingleOrDefaultAsync(user => user.Id == userId, context.HttpContext.RequestAborted);
 
-        if (!isActive)
+        if (user is null
+            || !user.IsActive
+            || user.MustChangePassword
+            || !string.Equals(user.SecurityStamp, securityStamp, StringComparison.Ordinal))
         {
-            context.Fail("User is inactive.");
+            context.Fail("User is not authorized.");
         }
     };
 });

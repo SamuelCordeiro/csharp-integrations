@@ -44,6 +44,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
         builder.Entity<ApplicationUser>(entity =>
         {
             entity.Property(user => user.IsActive).HasDefaultValue(true);
+            entity.Property(user => user.MustChangePassword).HasDefaultValue(false);
             entity.Property(user => user.CreatedAtUtc).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(user => user.UpdatedAtUtc).HasDefaultValueSql("CURRENT_TIMESTAMP");
         });
